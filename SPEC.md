@@ -253,11 +253,47 @@ on most, it is useless.
 
 ## 5. Decision model
 
-**Status (Oct 28): TypeSafe Jev is dropped.** Interim decisions come from the deterministic rubric
-(stage 3 prompt). Planned replacement: Muse Glimmer (open weights) served with vLLM on Modal, using
-constrained choice over single-letter option labels and the first-token logprobs, renormalised over
-the options, as the probability. Same schema and enums as below. The Jev details are kept as the
-record of what the reference decisions were produced with.
+**Status (Oct 28):** TypeSafe Jev is dropped. Decisions come from **Muse Spark 1.3** (`muse-spark-1.3`,
+Meta Model API) with probabilities, behind the same schema as the rubric (`pattern`, `risk_level`,
+`needs_inspection`). The deterministic rubric (§4) stays as an independent check, and the two are
+compared at every cutoff. Muse Glimmer (open weights, vLLM on Modal, geo-sar only) is a later
+stretch behind the same interface.
+
+### 5.0 Muse Spark decisions (decide/model.py)
+- **Input per asset per cutoff:** the §3.6 features and the §4 flags, including escalate and the
+  persistence fields, as compact JSON. **Not** the rubric's verdict (the model would copy it), and
+  **not** the owner condition (it stays an external overlay, §4). Not-monitored bridges are not sent;
+  they keep the deterministic "not_monitored / unknown" decision.
+- **Questions:** one per field, each a multiple choice over single-letter options whose text is the
+  enum description below (risk: none, watch, elevated, high; pattern: stable, uniform_settlement,
+  differential, accelerating, unreliable; inspection: yes, no). The system prompt states the
+  engineering principles of §4 in general terms and never names a bridge.
+- **Probability:** if the API returns `logprobs`/`top_logprobs`, ask for a single-letter answer and
+  renormalise the first-token probabilities over the option letters. If it does not, sample the same
+  question k = 5 times at temperature 1 and use vote shares. Record which method was used.
+  Temperature 0 (or the majority vote) gives the answer.
+- **Output:** `pattern, risk_level, needs_inspection, p_pattern, p_risk, p_inspect,
+  prob_method, source="muse-spark-1.3"`; any error is recorded per row, never silently replaced by
+  the rubric.
+- **Agreement:** per cutoff, the share of assets where model and rubric give the same risk level,
+  and a list of disagreements. Agreement is reported, not optimised: never tune the prompt on a
+  named bridge or on the hindcast result.
+- **Cost:** measure on one cutoff first and project; stay under $5 for all cutoffs. If reasoning
+  tokens dominate, use the lowest reasoning setting the API offers.
+
+Enum descriptions (the option text):
+```
+pattern:  stable "No meaningful motion; velocities within the noise floor."
+          uniform_settlement "The whole asset moves together at a steady rate; low strain."
+          differential "Parts of the asset move at clearly different rates; induces strain."
+          accelerating "Motion is speeding up compared with the asset's longer-term behaviour."
+          unreliable "Too few points or tracks to judge."
+risk:     none "Routine monitoring only."
+          watch "Keep on the watchlist; re-evaluate at the next data update."
+          elevated "Schedule a targeted review of the flagged spans within the year."
+          high "Schedule a field inspection within the quarter."
+inspect:  yes / no "Should a field inspection be scheduled within the next quarter?"
+```
 
 ### 5.1 Former: Jev via Pydantic AI, model `typesafe:jev-latest`
 

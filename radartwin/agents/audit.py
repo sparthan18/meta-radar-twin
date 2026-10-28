@@ -16,6 +16,7 @@ from openai import AuthenticationError
 
 from radartwin.agents import fidelity as fidelity_mod
 from radartwin.agents.llm import get_client, model_name
+from radartwin.decide import model as model_mod
 from radartwin.decide.coverage import not_monitored_bridges
 from radartwin.decide.features import asset_features
 from radartwin.decide.rubric import decide, flags
@@ -61,6 +62,15 @@ span's mm/yr value quoted from this run's span series.
 - When the months-since-escalation value is 0, write "escalated this month", never \
 "0.0 months ago". Format all month counts as whole numbers (for example "2 months ago", \
 not "2.0 months ago").
+- The Action list and Watch list follow the MODEL decision: the Action list holds \
+bridges the model rates high, the Watch list holds bridges the model rates elevated \
+or watch. The "why" column still cites radar evidence (flags, features, spans) in a \
+few words, never probabilities.
+- Quote model probabilities exactly as shown in the tool results (for example 0.6), \
+as decimals, never as percent. Probabilities appear only in the Model and rubric \
+section.
+- If a model decision carries an error instead of a verdict, say so in the Model and \
+rubric section and place that bridge by its rubric risk, labelled as the rubric's.
 
 Work plan (be economical with tool calls):
 - Start with list_assets, then get_decisions once to survey every bridge in a single call.
@@ -69,26 +79,31 @@ Work plan (be economical with tool calls):
 
 Memo structure, in this order, with named headings (no numbers):
 - Verdict: two or three sentences naming the bridges that need action now and why, from \
-radar evidence only; never mention the owner condition here.
+radar evidence only; never mention the owner condition here. The bridges that need action \
+are the ones the model rates high.
 - Action list: a Markdown table with columns bridge, risk, why in a few words, what to do. \
-Only bridges that need action now. Both the "why" and the "what to do" columns cite radar \
+Only bridges the model rates high. Both the "why" and the "what to do" columns cite radar \
 evidence only, pointing at bridge parts only from span evidence.
-- Watch list: one line per bridge at elevated or watch, saying what is being watched.
+- Watch list: one line per bridge the model rates elevated or watch, saying what is \
+being watched.
+- Model and rubric: a short section listing every bridge where the model and the rubric \
+give different risk levels, with the model's probability in plain words. If they agree \
+everywhere, write one line saying so, without counts.
 - Not monitored by radar: one line per bridge, with its point count, saying it needs another \
 inspection method and that this is not a sign it is safe.
-- Evidence for each high bridge: the key numbers with units, and the escalation history \
-(how many times it escalated in the past 12 months and how many months since the most \
-recent escalation, in plain words; "escalated this month" when that count is 0, month \
-counts as whole numbers). Quote the feature values behind each verdict. Radar evidence \
-only; never repeat owner-supplied words here.
+- Evidence for each bridge the model rates high: the key numbers with units, and the \
+escalation history (how many times it escalated in the past 12 months and how many months \
+since the most recent escalation, in plain words; "escalated this month" when that count \
+is 0, month counts as whole numbers). Quote the feature values behind each verdict. Radar \
+evidence only; never repeat owner-supplied words here.
 - Owner condition: the ONLY section where owner inputs appear. Give the overlay result \
 and its source, labelled as an external input with the source quoted.
-- Caveats: EGMS latency (about a year), interim rubric, data-quality limits. State that EGMS \
-releases lag the present by about a year, so a cutoff reflects earlier conditions and a real \
-operator at the time would have seen older data. Say plainly that today's decisions come from \
-an interim deterministic rubric applied to pre-computed features, and that model-backed \
-decisions with probabilities are planned. State data-quality limits: thinly measured assets \
-carry wide uncertainty.
+- Caveats: EGMS latency (about a year), model decisions with probabilities, data-quality \
+limits. State that EGMS releases lag the present by about a year, so a cutoff reflects \
+earlier conditions and a real operator at the time would have seen older data. Say plainly \
+that today's decisions come from the Muse Spark model with probabilities (the share of \
+five repeated judgments), checked against an independent deterministic rubric applied to \
+the same features. State data-quality limits: thinly measured assets carry wide uncertainty.
 - For EVERY asset whose features show low radar coverage, write all three: radar sees little of \
 that structure, so it needs another inspection method, and this is not a sign the bridge is safe.
 
@@ -114,13 +129,13 @@ TOOLS = [
             "asset": {"type": "string"}}, "required": ["asset"]}}},
     {"type": "function", "function": {
         "name": "get_decision",
-        "description": "Deterministic flags and interim rubric decision for one asset at a cutoff.",
+        "description": "Deterministic flags, Muse Spark decision with probabilities (model_decision, decides the Action and Watch lists), and rubric decision (decision, independent check) for one asset at a cutoff.",
         "parameters": {"type": "object", "properties": {
             "asset": {"type": "string"}, "cutoff": {"type": "string"}},
             "required": ["asset", "cutoff"]}}},
     {"type": "function", "function": {
         "name": "get_decisions",
-        "description": "Deterministic flags and interim rubric decisions for every bridge at a cutoff, including not-monitored ones, in one call.",
+        "description": "Flags, model decisions with probabilities and rubric decisions for every bridge at a cutoff, including not-monitored ones, in one call. Action and Watch membership follow the model decision.",
         "parameters": {"type": "object", "properties": {
             "cutoff": {"type": "string", "description": "Cutoff date YYYY-MM-DD."}},
             "required": ["cutoff"]}}},
@@ -251,6 +266,35 @@ class AuditTools:
             "reason": str(d["reason"]),
         }
 
+    def _model_decision_for(self, asset: str) -> dict:
+        """Muse Spark decision with probabilities (SPEC §5.0).
+
+        Not-monitored bridges keep the deterministic verdict without an API
+        call; analysed bridges reuse the cached model decisions when the
+        cutoff was already run with ``decisions.py --model``. A persistent
+        model error is returned as-is, never replaced by the rubric.
+        """
+        if asset in self.dropped_names:
+            return {
+                "pattern": "not_monitored",
+                "risk_level": "unknown",
+                "needs_inspection": False,
+                "p_pattern": None,
+                "p_risk": None,
+                "p_inspect": None,
+                "prob_method": "votes",
+                "source": model_mod.MODEL,
+                "error": "not monitored by radar: not sent to the model",
+            }
+        row = self._feature_table().set_index("asset").loc[asset]
+        fl = flags(row)
+        feats = row.to_dict()
+        # set_index() dropped the asset name; restore it so the model input
+        # (hence the cache key) matches the decisions path exactly. Without
+        # this the audit silently re-draws every cached sample.
+        feats["asset"] = asset
+        return model_mod.decide_with_model(feats, fl)
+
     def _decision_for(self, asset: str) -> dict:
         if asset in self.dropped_names:
             row = self._dropped_row(asset)
@@ -269,6 +313,7 @@ class AuditTools:
                     "owner_condition_alert": False,
                     "source": "rubric",
                 },
+                "model_decision": self._model_decision_for(asset),
                 "scatterers": row["scatterers"],
                 "tracks": row["tracks"],
                 "points_per_ha": row["points_per_ha"],
@@ -278,7 +323,8 @@ class AuditTools:
         row = self._feature_table().set_index("asset").loc[asset]
         fl = flags(row)
         dec = decide(row, fl)
-        return {"asset": asset, "cutoff": self.cutoff, "flags": fl, "decision": dec}
+        return {"asset": asset, "cutoff": self.cutoff, "flags": fl, "decision": dec,
+                "model_decision": self._model_decision_for(asset)}
 
     def list_assets(self, cutoff: str) -> str:
         if (err := self._check_cutoff(cutoff)) is not None:

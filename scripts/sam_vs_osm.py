@@ -6,7 +6,7 @@ JSON (no network), prompts SAM 3.1 with their bounding boxes in ONE request,
 and compares the returned polygons to the OSM polygons per bridge by IoU. A
 text-prompt variant (``"bridge"``, one request) is compared honestly in the
 same table. Writes ``out/sam_vs_osm.png`` and ``out/sam_polygons.geojson``
-(the box-prompt polygons, so later stages can reuse them without new calls).
+(the box-prompt polygons, so later phases can reuse them without new calls).
 """
 from __future__ import annotations
 

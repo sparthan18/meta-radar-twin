@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the Muse Spark audit agent for one cutoff (stage 3).
+"""Run the Muse Spark audit agent for one cutoff (phase 3).
 
 Usage::
 

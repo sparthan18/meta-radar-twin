@@ -79,9 +79,34 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 ## Muse Spark audit agent
 
 ### Reasoning tokens eat the output budget
-- **What you see:** the memo turn ends mid-sentence.
+- **What you see:** the memo turn ends mid-sentence. On single-letter decision calls the symptom is sharper: `finish_reason: "length"` with `content: null` — nothing to parse.
 - **Why:** reasoning tokens count against `max_tokens`.
-- **Fix:** set `max_tokens` generously (32000 worked) and check the finish reason.
+- **Fix:** set `max_tokens` generously (32000 worked for memos, 1000 for three-letter answers) and check the finish reason.
+
+### Muse Spark rejects logprobs and n > 1
+- **What you see:** `logprobs: true` returns 400 `` `logprobs` is not supported with reasoning. ``, and `n: 3` returns 400 `` `n` must be 1, got 3 ``.
+- **Why:** this model always reasons, and the API only serves one completion per request.
+- **Fix:** probabilities come from votes: sample the same question five times at temperature 1 with `n: 1` and use vote shares. Budget five sequential calls per question, not one call with five completions.
+
+### reasoning_effort minimal still reasons
+- **What you see:** `reasoning_effort: "minimal"` on a trivial one-letter question still spends 109 reasoning tokens of 119 completion tokens; the real decision prompt averages ~360.
+- **Why:** "minimal" lowers the effort, it does not switch reasoning off. `"none"` is handled inconsistently: some processes get a 400, others get an accepted call that reasons anyway.
+- **Fix:** hardcode `"minimal"` (the lowest reliably offered setting), keep prompts short since output tokens dominate, and set `max_tokens` above the reasoning demand plus the answer. Reasoning is demand-driven, not budget-filling: a trivial question at `max_tokens: 500` used 109 tokens, not ~490 — so lowering `max_tokens` never saves money, it only cuts answers off.
+
+### A lazily resolved cache key silently re-draws samples
+- **What you see:** a fresh process makes 96 API calls for a cutoff that is fully cached, and a cost probe counts 19 fresh assets while the run itself hits cache.
+- **Why:** the cache key hashed a runtime-resolved `reasoning_effort` (`"none"` until the first 400 fell back to `"minimal"`). Fresh processes hash `"none"`; stored entries sit under `"minimal"`. Every process re-resolves, so keys never match across processes.
+- **Fix:** every element of a cache key must be a constant. Never hash a value that is resolved at runtime. Cost projections must be computed from fresh samples actually drawn, never from a pre-resolution freshness probe.
+
+### A blacklist input builder leaks verdict fields and splits the cache
+- **What you see:** the model input for decisions-table rows carries `owner_condition_alert`, `source`, `reason` and duplicated flags — fields that are neither SPEC features nor flags — while audit-path rows for the same asset hash differently, so the two callers never share cache entries.
+- **Why:** the builder excluded two keys instead of including the spec'd ones. Any caller passing a richer row silently smuggles the extras into the prompt; `owner_condition_alert=true` encodes the rubric verdict for poor-condition bridges.
+- **Fix:** whitelist exactly the SPEC feature keys plus the nested flags, and pin it with a test that enriched and pure rows for one asset build byte-identical inputs (`tests/test_decide_model.py`). Already-drawn votes were re-keyed by hash match; only the four alert rows needed a leak warning.
+
+### Pandas dtype drift splits identical-looking cache keys
+- **What you see:** two code paths build "equal" model inputs for one asset, yet hash to different cache keys — and the audit silently re-draws 95 cached samples ($0.22).
+- **Why:** `1.0 == 1` in Python but they serialize differently. The decisions table upcasts `rank_in_city` to float (NaN for not-monitored rows); the feature table keeps it int. A dict-equality check on the inputs misses this completely. (A second instance of the same bug class: `set_index("asset")` drops the name column, so audit rows hashed without `asset` until it was restored.)
+- **Fix:** canonicalize scalars at the input builder: integral floats become ints, numpy types become builtins. Pin it with a test that float-spelled and int-spelled rows build identical inputs.
 
 ### One-asset-per-call tools burn the call cap
 - **What you see:** the agent spends 19 of its 25 calls on `get_decision`, one bridge at a time, and has to stop exactly at the cap.
@@ -102,6 +127,18 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 - **Fix:** the verdict, actions and evidence cite radar results only, for example "focus on the end span moving up at 3.99 mm/yr against its neighbours". Owner inputs appear only in their own labelled section with the source quoted. The memo check flags any word found only in owner-supplied text that appears outside that section, and its self-test plants "prioritise the tram section" to prove it.
 - **Insight:** a sceptical judge will read a correct-sounding reference to the part that later failed as hindsight, unless its source is obvious.
 
+### A cost projection from cached results comes out near zero
+- **What you see:** the pilot month measured about $0.23 and projected $7–8 for all 33 months, over the $5 limit. The full run then decided all 33 months fit the budget anyway and started at January 2022.
+- **Why:** the full run re-estimated its cost from the pilot month, which was already cached, so it saw almost no fresh spend.
+- **Fix:** project only from fresh, uncached calls, or carry the pilot's measured cost forward. Print the projection the run actually used before it spends anything. (This run was allowed to finish all 33 months, about $2–3 over the phase cap.)
+
+### A famous name is a hindsight leak
+- **What you see:** the model's input for each bridge includes its name and the cutoff date, for example "Carolabrücke" and "2024-08-01".
+- **Why:** a model trained after September 2024 may know that Carolabrücke collapsed then. Seeing the name could push it towards "high" from memory rather than from the radar features.
+- **Evidence so far:** over all 33 months, the model's "high" matches the escalate flag exactly, including months where Carolabrücke is quiet and rated "none" or "watch". So the name has not visibly driven the top level.
+- **Evidence (phase 4c):** anonymised re-runs ("bridge 01"–"bridge 19" by OSM asset-id order, no cutoff date) at 2023-10-01, 2024-08-01 and 2024-09-01 flipped 3 of 57 risk levels — Budapester Straße elevated→watch (Aug 2024), Waldschlößchenbrücke none→watch (Aug 2024) and watch→elevated (Sep 2024) — all between low levels with p_high 0.0 both ways, against a 0-of-19 noise baseline from a second named draw at 2024-09-01. Carolabrücke stayed high at p_high 1.0 named and anonymised in all three months, and no bridge gained or lost "high".
+- **Fix:** `build_model_input` has an anonymised mode (`anonymous=True`); named stays the default and hashes to different cache keys. The check lives in `out/name_sensitivity.csv`, drawn by `scripts/name_sensitivity.py`. A judge asking whether the model simply knows the answer gets this table.
+
 ## Working with Muse Code
 
 ### The sandbox can't reach package registries
@@ -110,14 +147,14 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 
 ### Approvals can stall a run for hours
 - **What you see:** the run sits idle while the auto-review judge escalates a network request to a human.
-- **Fix:** anything watching a run should also watch for pending approvals, not just for the run's end. List the allowed network hosts in the stage prompt (api.meta.ai and dev.meta.ai), so out-of-scope requests stand out.
+- **Fix:** anything watching a run should also watch for pending approvals, not just for the run's end. List the allowed network hosts in the phase prompt (api.meta.ai and dev.meta.ai), so out-of-scope requests stand out.
 
 ### Headless mode shows nothing until the end
 - **Fix:** run the interactive TUI in a visible terminal, `muse --trust-workspace "<prompt>"`, so progress can be watched. Sessions are saved under `~/.local/share/muse/sessions/` and can be exported with `muse export --redacted`.
 
 ### Give the agent a budget and an exit
-- Every stage prompt caps paid API calls (SAM requests, Muse Spark spend) and says what to do on a 401: stop and report, never stub results.
-- Every stage prompt says "do not create git commits", so commits stay a human decision.
+- Every phase prompt caps paid API calls (SAM requests, Muse Spark spend) and says what to do on a 401: stop and report, never stub results.
+- Every phase prompt says "do not create git commits", so commits stay a human decision.
 
 ## Environment
 
