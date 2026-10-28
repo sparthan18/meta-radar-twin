@@ -36,9 +36,10 @@ the processed product (EGMS) for free. Almost nobody turns that feed into a deci
 ## What it has shown so far (Dresden, 19 bridges, EGMS 2020–2024)
 
 - The pipeline reproduces the official EGMS velocities to 0.1 mm/yr.
-- Carola was on the inspection list in October 2023 (eleven months before collapse) and again
-  from August 2024 (six weeks before), when it was the most anomalous bridge in the city relative
-  to its own history. It dropped off the list in spring 2024.
+- Carola was the most anomalous bridge in the city in October 2023 (eleven months before
+  collapse; risk *high*, inspect recommended) and again in September 2024 (ten days before;
+  rank 1, z = 4.2, risk *high*), with August 2024 at rank 3 and the top own-history deviation.
+  It dropped off the list in spring 2024.
 - The signal is differential motion along the deck, not bulk settlement.
 - Visible false positives: the Albert Bridge ranked first in September 2024 and did not fail; two
   small harbour bridges out-scored Carola for most of 2024 with no ground truth either way.
@@ -67,9 +68,10 @@ science.
 ## The hard question: would it have warned anyone in August 2024?
 
 **What the screen would have said.** At the 1 Aug 2024 cutoff Carola was rank 3 of 19 by score and
-rank 1 by deviation from its own history (z = 2.6). Two flags lit: differential motion along the
+rank 1 by deviation from its own history (z = 2.8). Two flags lit: differential motion along the
 deck, and outlier against its own past. Jev: pattern *differential* at full confidence, risk
-*elevated* at 42%, inspect *yes* at 60%. The per-span chart showed the north (Neustadt-side) spans
+*elevated* at 47%, inspect *yes* at 52%. By the 1 Sept 2024 cutoff it was rank 1 with z = 4.2,
+three flags lit, and risk *high*. The per-span chart showed the north (Neustadt-side) spans
 and the mid-river span drifting down through 2024 while the south half stayed still, which is the
 end of the bridge where the strand fell.
 
@@ -78,9 +80,12 @@ signal is 2–3 mm/yr of differential motion. Two small harbour bridges sat abov
 labels. The corrosion was inside a sealed box girder, so an ordinary inspection prompted by the
 flag might not have found the mechanism.
 
-**Would it have stressed urgency? Not enough.** "Elevated" is the third of five levels and maps to
-a review within the year; the inspect recommendation maps to a quarter. The collapse came in six
-weeks. The tool raised priority; it did not convey urgency. Two things explain the gap:
+**Would it have stressed urgency? Partly.** In October 2023 the verdict was already *high*, which
+maps to a field inspection within the quarter, and that is the one reading a real operator would
+have had given EGMS latency. In August 2024 it fell back to *elevated*, a review within the year,
+six weeks before the collapse; only the September cutoff, ten days out, returned to *high*. The tool
+raised priority and, once, urgency; it did not hold the alarm through summer 2024. Two things
+explain the gap:
 
 - The strongest fact in the data, "moving more than at any point in this asset's record, and
   concentrated at one end", was treated as two flags among five rather than as an escalation.

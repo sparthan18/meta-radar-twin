@@ -1,0 +1,1 @@
+"""Segmentation: asset footprints."""

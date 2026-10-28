@@ -5,3 +5,4 @@ __pycache__/
 .env
 out/
 web/node_modules/
+muse/logs/

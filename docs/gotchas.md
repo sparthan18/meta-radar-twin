@@ -1,0 +1,127 @@
+# Gotchas and insights
+
+Things that cost time on this project, why they happened, and what fixed them. Add to it whenever something surprises you. The short checklist version lives in SPEC.md section 11.
+
+Each entry: **what you see**, **why**, **fix or workaround**.
+
+## Radar and remote sensing
+
+### A real bridge can look like "not a bridge" to radar
+- **What you see:** the backscatter guardrail (bright fraction above −8 dB) scores Augustusbrücke at 0.07 and 0.06, against 0.64 for Carolabrücke. A fixed threshold would reject it as a segmentation error.
+- **Why:** radar brightness depends on material, shape and orientation to the satellite. Sandstone arches seen side-on return little energy. The EGMS point count agrees: 4 scatterers per hectare on Augustus against 54 on Carola and 124 across the whole image. The segmentation was correct; radar just sees little of that structure.
+- **Fix:** split the guardrail into two questions (SPEC section 7).
+  - "Is the polygon the right object?" is answered by agreement between SAM and OpenStreetMap (IoU), or SAM's confidence when there is no OSM outline.
+  - "Can radar monitor it?" is answered by scatterer density relative to the city's bridges, plus bright fraction where a radar chip exists.
+  - Low coverage is reported, caps risk at "watch", and is never excluded.
+- **Insight:** any brightness test, absolute or relative to the surroundings, measures radar visibility, not bridge-ness. Comparing against nearby water also fails wherever there is no water (overpasses, rail bridges, one-sided dams). "Radar can't watch this structure well, inspect it another way" is a useful finding in its own right.
+
+### EGMS data is about a year old
+- **What you see:** the 2020–2024 release was published in Aug–Sep 2025.
+- **Why:** EGMS is a processed, validated product released yearly.
+- **Fix:** state the latency in every memo. The method is the point. Live monitoring would run the same pipeline on fresh Sentinel-1 interferometry.
+
+## Analytics
+
+### Two correct implementations disagreed by up to 1 mm/yr
+- **What you see:** a fresh build missed the reference numbers.
+- **Why:** the reference came from a prototype with two hidden artefacts. Its one-year window ended at the union of all tracks' dates instead of each track's own last epoch. Its span-merge ties were broken by insertion order instead of the lower id.
+- **Fix:** each track uses only its own epochs, and ties go to the lower span id. Both rules are now pinned in SPEC 3.5, and the reference was regenerated.
+- **Insight:** when a rebuild disagrees with a reference, check the reference before changing correct code. Stale targets pushed the build agent to "fix" correct code and to restore old reference files.
+
+### Leakage in the retrospective
+- Never include epochs on or after the event date in any retrospective statistic.
+- Refit the seasonal model inside every rolling cutoff. One fit on all the data leaks the future.
+- Tiny spans with 1–2 scatterers dominate an unweighted max. Shrink by effective sample size and merge spans with fewer than 3 points.
+
+### Bridges with too few radar points vanish silently
+- **What you see:** Augustusbrücke is missing from the 19 analysed bridges, so the low-coverage rule never fires on anything.
+- **Why:** the city ranking keeps only bridges with enough scatterers and tracks. Everything below the minimum is dropped before any later step sees it.
+- **Fix (planned):** carry dropped bridges through as "not monitored: too few radar points" in the decisions, memo and hazard layer. A bridge radar cannot see is a finding, not a gap to hide.
+
+### A rule that only one asset can trigger looks like hindsight
+- **What you see:** "immediate" = escalate and condition "poor", but only Carolabrücke has a condition grade in the site config. No other bridge can ever reach "immediate".
+- **Why:** the condition register was filled in for the event bridge only.
+- **Fix:** either give every bridge a condition grade from a public source, or lead with "high" (escalate), which every bridge can reach, and treat condition as a clearly labelled external input. A sceptical judge will check this first.
+
+### Monthly decisions flicker, and the first persistence fix flooded the list
+- **What you see:** Carolabrücke escalates in Aug 2022, Oct 2023, Aug 2024 and Sep 2024, but drops back to "none" in the months between.
+- **Why:** each cutoff is judged independently, and z-scores near the threshold cross it back and forth.
+- **First fix, which failed:** "high if escalated at least twice in 12 months". Bridges with a long episode stayed high for a year after going quiet. 5–8 of 19 bridges were high in most months. Pieschener Mole escalated six months running in 2024 and was still "high" in Sep 2024 with z = −1.7.
+- **Fix:** "high" only when escalating now. "Elevated" for 3 months after an escalation. The 12-month count is reported as evidence, not used to raise the level. Result: 1–4 high bridges a month, median 1, and Carola is the only high bridge in Aug and Sep 2024.
+- **Insight:** simulate a rule against every month of real data before adopting it. A rule that sounds sensible can turn the alert list into noise.
+
+### Retrospective tools must not return the future
+- **What you see:** the audit tool that returns a bridge's span history returned every month to Sep 2024, even for the Oct 2023 memo.
+- **Why:** the tool read the full rolling table instead of the rows up to its run's cutoff.
+- **Fix:** every tool filters to dates at or before the run's cutoff. After each retrospective run, check the latest date in its tool log.
+
+## SAM 3.1 on the Meta Model API
+
+### Mask payloads are not standard base85
+- **What you see:** `base64.b85decode` gives the wrong byte count. Hours of guessing codecs (deflate, run-length, Golomb, XOR) found nothing.
+- **Fix:** use Meta's official parser, `meta-sam-parser` on PyPI, imported as `meta_sam_parser`.
+  - `image_segmentation_format().create_parser()` parses records.
+  - `decode_mask_to_raster` decodes masks.
+  - `build_object_prompt` builds box prompts.
+  - The docs are at dev.meta.ai/docs/sam/client-libraries.
+- **Insight:** look for an official SDK before reverse-engineering a wire format. Meta's SAM licence also forbids reverse engineering the SAM materials.
+
+### Mask rasters are box-local
+- **What you see:** stretching the mask to the full image smears it everywhere, and IoU is about 0.
+- **Why:** a `data=H,W,...` raster covers only its record's box. For example, a 17×35 px box carries a 35×17 raster.
+- **Fix:** resize the raster to the box size and paste it at the box offset, then vectorise with the chip transform.
+
+### Text prompts don't find bridges at 10 m
+- **What you see:** "bridge", "river bridge" and "road bridge" return empty output on the Sentinel-2 chip. Upsampling the chip 4x doesn't help. Large concepts such as "water" and "road" do return masks.
+- **Fix:** use OSM footprint bounding boxes as box prompts. Many boxes go in one request: one `<0f>` header with comma-separated ids. Result: IoU 0.54 for Augustus and 0.33 for Carola.
+- **Insight:** an empty response means "concept absent", not an error.
+
+## Muse Spark audit agent
+
+### Reasoning tokens eat the output budget
+- **What you see:** the memo turn ends mid-sentence.
+- **Why:** reasoning tokens count against `max_tokens`.
+- **Fix:** set `max_tokens` generously (32000 worked) and check the finish reason.
+
+### One-asset-per-call tools burn the call cap
+- **What you see:** the agent spends 19 of its 25 calls on `get_decision`, one bridge at a time, and has to stop exactly at the cap.
+- **Fix (planned):** add a batch tool that returns every bridge's decision in one call, so the budget goes to the bridges that matter.
+
+### Traceable is not the same as readable
+- **What you see:** every number in the memo traces back to a tool result (64 of 64), but the prose reads like a data dump ("needs inspection absent", "flag differential present").
+- **Fix (planned):** keep the traceability check and give the agent an engineer-facing structure: verdict first, evidence second, caveats last.
+
+### A loose traceability check passes almost anything
+- **What you see:** the check reported every memo number as traced, but planted numbers like 42, 0.9 and 7 also passed.
+- **Why:** it matched raw substrings, so "42" counted as found inside "0.42" or "1428".
+- **Fix:** match whole number tokens, and accept a rounded value only within half a unit of its last decimal place. Test any checker with planted numbers before trusting its pass rate.
+
+### The agent can borrow conclusions from external inputs
+- **What you see:** the Sep 2024 memo says "inspect now and prioritise the tram section" for Carolabrücke. Section C, the tram section, is the part that later collapsed.
+- **Why:** the only mention of the tram section in the tool results is the owner-condition source text, the pre-event renovation schedule. The agent turned that external input into an action, not the radar evidence.
+- **Fix:** the verdict, actions and evidence cite radar results only, for example "focus on the end span moving up at 3.99 mm/yr against its neighbours". Owner inputs appear only in their own labelled section with the source quoted. The memo check flags any word found only in owner-supplied text that appears outside that section, and its self-test plants "prioritise the tram section" to prove it.
+- **Insight:** a sceptical judge will read a correct-sounding reference to the part that later failed as hindsight, unless its source is obvious.
+
+## Working with Muse Code
+
+### The sandbox can't reach package registries
+- **What you see:** `pip install` times out inside a Muse run. The agent then tries npm, CDNs and foreign PyPI mirrors, which also time out.
+- **Fix:** install dependencies outside Muse with `uv add <package>` in the repo. Then tell Muse the package is installed, that it must not install anything or contact registries, and to read the installed source rather than guess the API.
+
+### Approvals can stall a run for hours
+- **What you see:** the run sits idle while the auto-review judge escalates a network request to a human.
+- **Fix:** anything watching a run should also watch for pending approvals, not just for the run's end. List the allowed network hosts in the stage prompt (api.meta.ai and dev.meta.ai), so out-of-scope requests stand out.
+
+### Headless mode shows nothing until the end
+- **Fix:** run the interactive TUI in a visible terminal, `muse --trust-workspace "<prompt>"`, so progress can be watched. Sessions are saved under `~/.local/share/muse/sessions/` and can be exported with `muse export --redacted`.
+
+### Give the agent a budget and an exit
+- Every stage prompt caps paid API calls (SAM requests, Muse Spark spend) and says what to do on a 401: stop and report, never stub results.
+- Every stage prompt says "do not create git commits", so commits stay a human decision.
+
+## Environment
+
+- Python 3.14 has no wheels for rasterio or geopandas, so the project pins 3.12.
+- Overpass returns 406 without a User-Agent and often returns 502 or HTML. Fix: send a User-Agent, use mirrors, and cache the JSON in `data/<site>/`.
+- Modal must always target workspace **geo-sar**. The machine default profile is a different workspace, and a plain `uv run modal ...` ignores `.env`, so `MODAL_PROFILE=geo-sar` there has no effect. Fix: run `MODAL_PROFILE=geo-sar uv run modal ...` or `uv run --env-file .env modal ...`, and check `modal profile current` prints `geo-sar` before any deploy.
+- TypeSafe Jev, now dropped: it rejected `int` fields, so enums were used, and a 401 meant a bad key.

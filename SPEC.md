@@ -151,7 +151,7 @@ Units: displacement mm, time decimal years from first epoch, velocity mm/yr, acc
   north (`axis[1] >= 0`). Returns (origin, axis, crs).
 - `along_cross(points, origin, axis, crs)` → `along = xy·axis`, `cross = xy·(-axis_y, axis_x)`.
 - `assign_spans(pts, span_m=60, min_pts=3)` → `span = floor((along - min)/60)`; merge any span
-  with < 3 points into the nearest span that has ≥ 3.
+  with < 3 points into the nearest span that has ≥ 3 (tie → lower id).
 
 ### 3.3 decompose.py
 `decompose(L, v)` with `L` rows `(los_east, los_north, los_up)` and `v` LOS values: require both
@@ -181,11 +181,19 @@ for cutoff in monthly cutoffs (2022-01-01 … event month):
 - `wmax = max |shr|`, `wspread = max(shr) - min(shr)`, **`score = wmax + wspread`**
 - `z` = `(score - median(score at earlier cutoffs)) / (1.4826·MAD)`, needs ≥ 6 earlier cutoffs.
 
-**Validation (reference/dresden_scores.csv etc.): Carola score rank among 19 must be 3 at
-2023-10-01, 10 at 2024-06-01, 3 at 2024-08-01, 2 at 2024-09-01; z rank 1 at 2024-08-01 and
-2024-09-01 (z ≈ 2.57).** Per-track long-term velocities on Carola (pre-collapse, raw) must match the
-EGMS `mean_velocity` column within 0.1 mm/yr: asc_044 −0.47 vs −0.51, asc_146 −0.59 vs −0.62,
-desc_095 0.24 vs 0.18.
+Two details that change the numbers and are therefore pinned:
+- Each track's series uses **only that track's own epochs** (the clipped CSVs share a union of
+  date columns; drop the all-NaN ones per track before computing `t`). The one-year window end
+  is the track's own last epoch before the cutoff.
+- When a small span is equidistant from two big spans, merge into the **lower span id**.
+
+**Validation (reference/dresden_scores.csv etc.): Carola score rank among 19 must be 1 at
+2023-10-01, 10 at 2024-06-01, 3 at 2024-08-01, 1 at 2024-09-01; z must be 2.47, 0.50, 2.83, 4.24
+at those cutoffs (±0.05); z rank 1 at 2024-08-01 and 2024-09-01.** Per-track long-term velocities
+on Carola (pre-collapse, raw) must match the EGMS `mean_velocity` column within 0.1 mm/yr:
+asc_044 −0.47 vs −0.51, asc_146 −0.59 vs −0.62, desc_095 0.24 vs 0.18. The reference numbers
+were produced by an independent implementation of this spec; a faithful rebuild matched them to
+< 0.01 mm/yr on every bridge and cutoff.
 
 ### 3.6 features per asset per cutoff (what Jev sees)
 ```
@@ -194,7 +202,8 @@ long_term_velocity_mm_yr (mean EGMS mean_velocity over the asset's points),
 max_span_velocity_change_mm_yr (= wmax), span_to_span_spread_mm_yr (= wspread),
 anomaly_score, score_vs_own_history_z, rank_in_city, bridges_in_city,
 city_p80_velocity_change_mm_yr, city_p80_spread_mm_yr,
-condition ("good"|"fair"|"poor"|"unknown")
+condition ("good"|"fair"|"poor"|"unknown"), condition_source,
+escalations_12m, months_since_esc, points_per_ha, bright_fraction (null without a radar chip), radar_coverage ("ok"|"low")
 ```
 Keep it small and literal; Jev reads questions literally and is weak at arithmetic.
 
@@ -207,16 +216,50 @@ accelerating  = wmax    > city_p80_velocity_change     # relative to the city at
 differential  = wspread > city_p80_spread
 outlier       = z > 2.0
 low_quality   = scatterers < 20 or tracks < 2
+low_coverage  = radar_coverage == "low"           # §7.2; caps risk at watch, never excludes
 ```
-**Escalation (new; state it as a general principle, never tune it on Carola):**
+**Escalation (state it as a general principle, never tune it on Carola):**
 ```
 escalate = outlier and differential            # "exceeds anything in this asset's record, concentrated at one end"
-immediate = escalate and condition == "poor"
 ```
-These two produce an explicit sentence in the facts passed to Jev. Validate that `escalate` fires
-on few bridges city-wide at each cutoff (report the count); if it fires on most, it is useless.
+**Persistence (leak-free: uses only cutoffs <= the current one):**
+```
+escalations_12m   = number of cutoffs in the 12 months up to and including this one where escalate fired
+months_since_esc  = months since the most recent escalation (null if none)
+```
+**Risk ladder (every asset can reach every level):**
+```
+high      = escalate                                               # firing now
+elevated  = months_since_esc <= 3, or (accelerating and differential), or outlier
+watch     = moving or accelerating or differential
+none      = otherwise
+cap at watch if low_quality or low_coverage
+```
+escalations_12m is evidence for the memo, not a level raiser: "high if escalated twice in 12 months"
+kept 5–8 of 19 bridges high in most months (Pieschener Mole: a six-month episode in 2024 stayed
+"high" long after it went quiet). Measured with this ladder: 1–4 high per month, median 1.
 
-## 5. Jev decisions (decide/jev.py) — Pydantic AI, model `typesafe:jev-latest`
+**Owner condition overlay (external input, never part of the headline):**
+`immediate = high and condition == "poor"`, only where `SITES[site].condition` gives a grade with a
+documented source dated before the cutoff. Report it as a separate column with the source. All
+headline numbers (counts, ranks, Carola's trajectory) use the ladder above, which every bridge can reach.
+Validate that `high` fires on few bridges city-wide at each cutoff (report the counts); if it fires
+on most, it is useless.
+
+**Not monitored:** named bridges >= 80 m that fail the scatterer/track minimum are not ranked
+(§3 is unchanged), but they appear in decisions, memo and hazard layer with
+`radar_coverage = "none"`, `pattern = "not_monitored"`, `risk_level = "unknown"`, and the reason
+(scatterer and track counts). Radar not seeing a bridge is a finding, not a gap to hide.
+
+## 5. Decision model
+
+**Status (Oct 28): TypeSafe Jev is dropped.** Interim decisions come from the deterministic rubric
+(stage 3 prompt). Planned replacement: Muse Glimmer (open weights) served with vLLM on Modal, using
+constrained choice over single-letter option labels and the first-token logprobs, renormalised over
+the options, as the probability. Same schema and enums as below. The Jev details are kept as the
+record of what the reference decisions were produced with.
+
+### 5.1 Former: Jev via Pydantic AI, model `typesafe:jev-latest`
 
 Docstrings ARE the questions. Integer rubrics are **not** supported by this SDK version; use enums.
 ```python
@@ -246,12 +289,20 @@ Per-field confidence: `result.response.provider_details["confidence"]`.
 Auth: `TYPESAFE_API_KEY`, SDK sends `Authorization: Bearer` to `https://api.typesafe.ai`. A 401
 means the key is bad; regenerate at console.typesafe.ai.
 
-**Reference (prototype, before escalation rule), cutoff 2024-09-01:** Carola → differential (p 1.00),
-elevated (0.44), inspect yes (0.62). Cutoff 2024-08-01: differential (1.00), elevated (0.42),
-inspect yes (0.60). Cutoff 2024-06-01: uniform_settlement, none, no. See `reference/jev_decisions_*.csv`.
-With the escalation rule and `condition="poor"`, Aug/Sep 2024 should reach *high* or *immediate*.
+**Reference (independent implementation, before the escalation rule), see `reference/jev_decisions_*.csv`:**
+- 2023-10-01: Carola rank 1, flags A D O → differential (p 0.54), **high** (0.39), inspect yes (0.70).
+- 2024-08-01: rank 3, flags D O → differential (1.00), elevated (0.47), inspect yes (0.52).
+- 2024-09-01: rank 1, flags A D O → differential (0.61), **high** (0.49), inspect yes (0.74).
+Jev's answers vary slightly run to run; match the pattern and risk level, not the probabilities.
+With the escalation rule and `condition="poor"`, Aug/Sep 2024 should reach *immediate*.
 
 Cost: ~400 decisions (19 bridges × 21 cutoffs) cost cents.
+
+### Modal workspace rule
+All Modal work (deploy, run, serve, volumes, secrets) targets workspace **geo-sar** only. Never
+deploy to any other workspace. Invoke Modal as `MODAL_PROFILE=geo-sar uv run modal ...` (or
+`uv run --env-file .env modal ...`) and first run `modal profile current`; abort unless it prints
+`geo-sar`. A plain `uv run modal ...` ignores `.env` and uses the machine default profile.
 
 ## 6. Meta Model API
 
@@ -265,16 +316,20 @@ Base URL `https://api.meta.ai/v1`, `Authorization: Bearer $MODEL_API_KEY`, OpenA
 - Text prompt: ONE noun phrase, e.g. `"bridge"`. Absent concept → empty output, not an error.
 - Box prompt grammar in the same `input_text`: `<0f>1<|box;x1=..;y1=..;x2=..;y2=..;w=W;h=H|>`
   (pixels; `x2,y2` inclusive; `w,h` must equal the image size or you get 400; ids unique).
-- Output is **text** on `output_text`: `<0f>id<|box;x1=..;y1=..;x2=..;y2=..;w=..;h=..;c=..|><|mask;x=0;y=0;data=H,W,~<base85>|>`
-  records separated by commas. Mask raster is H×W (smaller than the frame), encoding char after
-  `H,W,` is `~` (lossless, default) or `!` (one-bit); payload is **base85**. Decode to a row-major
-  0/1 array, resize to the frame, then `rasterio.features.shapes` with the chip transform → polygons.
+- Output is **text** on `output_text`: `<0f>id<|box;x1=..;y1=..;x2=..;y2=..;w=..;h=..;c=..|><|mask;x=0;y=0;data=H,W,<enc><payload>|>`
+  records separated by commas. Parse and decode with Meta's official `meta_sam_parser`
+  (PyPI `meta-sam-parser`): `image_segmentation_format()` for records, `decode_mask_to_raster`
+  for masks, `build_object_prompt` for box prompts. The payload is NOT standard base85; do not
+  hand-decode. Mask rasters are **box-local**: an H×W raster maps onto its record's box bounds,
+  so resize it to the box and paste it at the box offset, then `rasterio.features.shapes` with the
+  chip transform. Several boxes go in one request: one `<0f>` header, comma-separated ids.
 - Price $2.50 / 1,000 images.
 
 Plan: run on the Sentinel-2 `visual` chip (10 m). Pass OSM footprint bounding boxes (in chip pixel
 coordinates) as box prompts; also try text `"bridge"`. Compare SAM polygons to OSM polygons by IoU
-(`scripts/sam_vs_osm.py` → `out/sam_vs_osm.png` + a table). Expect SAM to refine OSM outlines,
-not to find bridges zero-shot at 10 m; say so.
+(`scripts/sam_vs_osm.py` → `out/sam_vs_osm.png` + a table). Measured: text prompts return nothing at 10 m (also with 4x upsampling); box prompts from OSM
+footprints work (IoU 0.54 Augustus, 0.33 Carola). SAM refines OSM outlines; it does not find
+bridges zero-shot at 10 m.
 
 ### 6.2 Muse Spark 1.3 (`muse-spark-1.3`) — agents/llm.py, agents/audit.py
 Chat Completions / Responses, 1M context, tool calling, vision. $1.25 in / $4.25 out per M tokens.
@@ -292,10 +347,28 @@ Ten-minute test on the SAR chip: if the edit is an honest "optical-style renderi
 labelled illustration in the memo. Otherwise drop it. It never feeds the pipeline.
 
 ## 7. Fidelity guardrail (agents/fidelity.py)
-For each asset polygon, mask the Sentinel-1 RTC VV chip, convert linear power to dB
-(`10·log10`), `bright_fraction = mean(dB > -8)`. Bridges/dams are metal/concrete → bright. A
-polygon with a low bright fraction is a segmentation error (water, grass) → flag it, exclude from
-ranking, report in the memo.
+Two separate questions. Neither one removes an asset from the ranking.
+
+**7.1 Is the polygon the right object?** (`outline_check`)
+Compare the SAM polygon with the OSM footprint by IoU. `outline_iou < 0.2` → `outline_mismatch = True`:
+show the polygon for review and fall back to the OSM footprint. With no OSM footprint, use SAM's
+own confidence (`score < 0.5` → mismatch). This needs no reference surface, so it works at any site.
+
+**7.2 Can radar monitor this structure?** (`radar_visibility`)
+- `points_per_ha` = EGMS scatterers inside the OSM footprint / footprint area. Computable for every
+  asset from EGMS alone, no imagery needed.
+- `bright_fraction` = mean(10·log10(VV) > −8 dB) over the footprint on the Sentinel-1 RTC chip,
+  only where a chip exists (else null). Supporting evidence, not a gate.
+- `radar_coverage = "low"` if `points_per_ha < 0.25 × median points_per_ha of the city's bridges`
+  at the same site, else `"ok"`.
+Low coverage is a finding, not an error: the structure is real but radar sees little of it
+(material, arches, orientation). Keep it ranked, cap its risk at "watch" (as for `low_quality`),
+and say in the memo that it needs another inspection method.
+
+Why not "low bright fraction = segmentation error": Augustusbrücke (sandstone arches) is a correct
+segmentation with bright_fraction 0.07 and 4 scatterers/ha, against Carolabrücke 0.64 and 54/ha.
+Any brightness test, absolute or relative to surroundings, measures radar visibility, not
+bridge-ness. See docs/gotchas.md.
 
 ## 8. Scripts and expected outputs
 - `scripts/clip_egms.py` — already-clipped files exist; keep for reproducibility.
@@ -337,6 +410,7 @@ Deploy: `wrangler pages deploy web --project-name radartwin`.
 8. Submit the evening of Nov 4 IST.
 
 ## 11. Pitfalls already paid for
+Full list with fixes and workarounds: docs/gotchas.md.
 - Python 3.14 has no wheels for rasterio/geopandas → pin 3.12.
 - Overpass: 406 without a User-Agent; frequent 502/HTML → mirrors + cache.
 - Never include epochs on/after `event_date` in any retrospective statistic (post-collapse epochs
