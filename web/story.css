@@ -1,0 +1,242 @@
+/* RadarTwin story mode (phase 7a): modes, captions, scrub bar, overlays. */
+
+/* ---------- Modes ---------- */
+body[data-mode="story"] #side { display: none; }
+body[data-mode="story"] #map { flex-basis: 100%; }
+body[data-mode="story"] .slider-wrap label[for="slider"],
+body[data-mode="story"] #slider { display: none; }
+body[data-mode="explore"] #scrubWrap { display: none; }
+body[data-mode="explore"] #btnExploreStory,
+body[data-mode="explore"] #btnCC { display: none; }
+body[data-mode="story"] #btnMemo { display: none; } /* its panel lives in the hidden side */
+body[data-mode="story"] #btnWatchStory { display: none; }
+body[data-mode="explore"] #historyStrip { display: none; }
+
+/* ---------- Headline card (replaces the phase-5e ticker) ---------- */
+#headline {
+  flex: 0 0 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-height: 2.7em; /* stable while scene 4 steps months */
+}
+#headline .headline-title { font-weight: 650; display: block; }
+#headline .headline-reason { color: var(--muted); font-size: 12.5px; display: block; }
+#headline.story-hide { visibility: hidden; } /* keeps its space in Story */
+
+/* History strip placeholder (phase 7b builds the real strip). */
+#historyStrip {
+  flex: 0 0 100%;
+  font-size: 12.5px;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+
+/* ---------- Scrub bar ---------- */
+#scrubWrap { position: relative; flex: 1; min-width: 160px; padding-bottom: 12px; }
+#scrub { width: 100%; }
+#chapters {
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 0; margin-top: -18px; pointer-events: none;
+}
+.chapter {
+  position: absolute; top: -2px;
+  width: 22px; height: 40px; margin-left: -11px;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  pointer-events: auto;
+}
+.chapter-dot {
+  position: absolute; left: 50%; top: 50%;
+  width: 9px; height: 9px; margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--muted);
+  border: 1px solid var(--card);
+}
+.chapter.active .chapter-dot { background: var(--accent); }
+.chapter::after {
+  content: attr(data-label);
+  position: absolute; left: 50%; bottom: 42px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 8px; font-size: 12px;
+  opacity: 0; pointer-events: none;
+}
+.chapter:hover::after, .chapter:focus-visible::after { opacity: 1; }
+#monthTicks { position: absolute; left: 0; right: 0; bottom: 0; height: 10px; }
+.month-tick {
+  position: absolute; bottom: 0; width: 2px; height: 7px;
+  margin-left: -1px; background: var(--muted); opacity: 0.55;
+}
+.month-tick.current { background: var(--accent); opacity: 1; height: 10px; }
+
+/* ---------- Map overlays ---------- */
+#map { position: relative; }
+#storyLanding {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; text-align: center; padding: 24px;
+  background: radial-gradient(ellipse at center, rgba(8, 12, 18, 0.55), rgba(8, 12, 18, 0.85));
+  color: #fff;
+}
+#storyLanding[hidden] { display: none; }
+/* Until the story starts the landing owns the map: never show the scene
+   title block or the scene tag under it, even if JS runs early. */
+#map:has(#storyLanding:not([hidden])) #sceneTitle,
+#map:has(#storyLanding:not([hidden])) #sceneTag {
+  display: none;
+}
+#storyLanding h2 { margin: 0; font-size: 40px; font-weight: 700; letter-spacing: 0.01em; }
+#storyLanding p { margin: 0; font-size: 16px; color: #cfd8e3; max-width: 34em; }
+#storyPlay {
+  font-size: 20px; font-weight: 650;
+  padding: 12px 44px; min-height: 56px; border-radius: 8px;
+  background: #fff; color: #16202b; border: 0; cursor: pointer;
+}
+#storyPlay:disabled { opacity: 0.6; cursor: wait; }
+#sceneTitle {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; text-align: center; pointer-events: none;
+  color: #fff; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+#sceneTitle[hidden] { display: none; }
+#sceneTitle strong { font-size: 40px; font-weight: 700; }
+#sceneTitle span { font-size: 16px; color: #cfd8e3; }
+#sceneCover {
+  position: absolute; inset: 0; z-index: 9;
+  display: flex; align-items: center; justify-content: center;
+  background: #0e141c; color: #9aa9bc; font-size: 14px;
+  padding: 24px; text-align: center;
+}
+#sceneCover[hidden] { display: none; }
+#sceneDim {
+  position: absolute; inset: 0; z-index: 9;
+  background: rgba(8, 12, 18, 0.72); pointer-events: none;
+}
+#sceneDim[hidden] { display: none; }
+
+/* Captions: lower-third, 32-36 px, at most two lines. */
+#caption {
+  position: absolute; left: 50%; bottom: 64px; z-index: 15;
+  transform: translateX(-50%) translateY(8px);
+  max-width: min(880px, 86%);
+  max-height: 2.6em; overflow: hidden;
+  font-size: 34px; line-height: 1.25; text-align: center;
+  color: #fff; background: rgba(10, 14, 20, 0.72);
+  padding: 10px 18px; border-radius: 8px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+#caption.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#caption.cc-off { display: none; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+body.story-reduced #caption { transition: opacity 0.2s ease; transform: translateX(-50%); }
+body.story-reduced #caption.show { transform: translateX(-50%); }
+@media (prefers-reduced-motion: reduce) {
+  #caption { transition: opacity 0.2s ease; transform: translateX(-50%); }
+  #caption.show { transform: translateX(-50%); }
+}
+
+#sceneTag {
+  position: absolute; top: 12px; left: 48px; z-index: 15;
+  font-size: 12px; font-weight: 600;
+  color: #fff; background: rgba(10, 14, 20, 0.72);
+  padding: 3px 10px; border-radius: 4px;
+  pointer-events: none;
+}
+#sceneTag[hidden] { display: none; }
+
+#storyCallouts {
+  position: absolute; top: 12px; left: 50%; z-index: 15;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+  pointer-events: none;
+}
+.story-callout {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600;
+  color: #fff; background: rgba(10, 14, 20, 0.82);
+  padding: 5px 12px; border-radius: 6px;
+}
+.story-callout .dot { width: 11px; height: 11px; border-radius: 50%; }
+.story-callout.level-watch .dot { background: #eab308; }
+.story-callout.level-elevated .dot { background: #f97316; }
+.story-callout.level-high .dot { background: #ef4444; }
+
+#dateRoll {
+  position: absolute; left: 50%; top: 38%; z-index: 15;
+  transform: translate(-50%, -50%);
+  font-size: 64px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: #fff; background: rgba(10, 14, 20, 0.72);
+  padding: 8px 26px; border-radius: 10px;
+  pointer-events: none; white-space: nowrap;
+}
+#dateRoll[hidden] { display: none; }
+
+#storyEnd {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 18, 0.78); padding: 24px;
+}
+#storyEnd[hidden] { display: none; }
+.story-end-card {
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 26px 34px; text-align: center; max-width: 30em;
+}
+.story-end-card p { margin: 0 0 8px; font-size: 22px; font-weight: 650; }
+.story-end-card p + p { font-size: 17px; font-weight: 400; color: var(--muted); }
+.story-end-actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
+.story-end-actions button {
+  font-size: 16px; padding: 8px 26px; min-height: 44px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  cursor: pointer;
+}
+.story-end-actions button:first-child {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+
+#hoverLabel {
+  position: absolute; z-index: 16;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  color: #fff; background: rgba(10, 14, 20, 0.85);
+  padding: 3px 9px; border-radius: 4px;
+  pointer-events: none;
+}
+#hoverLabel[hidden] { display: none; }
+
+#btnCC.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+/* ---------- Phone (<= 700 px) ---------- */
+@media (max-width: 700px) {
+  body[data-mode="story"] #map { flex-basis: auto; height: calc(100vh - 220px); min-height: 300px; }
+  #caption {
+    font-size: 22px; bottom: 12px; max-width: 94%;
+    padding: 8px 12px;
+  }
+  #storyLanding h2, #sceneTitle strong { font-size: 28px; }
+  #storyLanding p, #sceneTitle span { font-size: 14px; }
+  #dateRoll { font-size: 40px; top: 34%; }
+  .story-end-card { padding: 20px; }
+  .story-end-card p { font-size: 19px; }
+  #scrubWrap { flex: 1 1 100%; min-width: 0; }
+  #scrub { min-height: 40px; }
+  #scrub::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 28px; height: 40px; border-radius: 6px;
+    background: var(--accent);
+  }
+  #scrub::-moz-range-thumb {
+    width: 28px; height: 40px; border-radius: 6px; background: var(--accent);
+    border: 1px solid var(--border);
+  }
+  .chapter { width: 18px; margin-left: -9px; height: 40px; }
+  #btnCC, #btnExploreStory, #btnWatchStory { min-height: 40px; }
+}

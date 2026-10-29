@@ -485,6 +485,40 @@ def run_checks(data_dir: Path, out_dir: Path) -> list[str]:
             if stem not in memo_cutoffs:
                 errors.append(f"memos/{stem}.md exists but is not listed "
                               f"in memo_cutoffs")
+
+    # 13. bridge counts (phase 7a, story scene 3): n_monitored and
+    # n_not_monitored are present and sum to n_bridges, and all three
+    # agree with bridges.geojson.
+    n_bridges = decisions.get("n_bridges")
+    n_monitored = decisions.get("n_monitored")
+    n_not_monitored = decisions.get("n_not_monitored")
+    if not isinstance(n_bridges, int) or isinstance(n_bridges, bool):
+        errors.append(f"decisions.json: n_bridges={n_bridges!r} is not an int")
+    if not isinstance(n_monitored, int) or isinstance(n_monitored, bool):
+        errors.append(f"decisions.json: n_monitored={n_monitored!r} is not an int")
+    if not isinstance(n_not_monitored, int) or isinstance(n_not_monitored, bool):
+        errors.append(f"decisions.json: n_not_monitored={n_not_monitored!r} "
+                      f"is not an int")
+    if all(isinstance(v, int) and not isinstance(v, bool)
+           for v in (n_bridges, n_monitored, n_not_monitored)):
+        if n_monitored + n_not_monitored != n_bridges:
+            errors.append(f"decisions.json: n_monitored ({n_monitored}) + "
+                          f"n_not_monitored ({n_not_monitored}) != n_bridges "
+                          f"({n_bridges})")
+        geo_total = len(bridges.get("features", []))
+        geo_not = sum(1 for f in bridges.get("features", [])
+                      if f.get("properties", {}).get("monitored") is False)
+        if n_bridges != geo_total:
+            errors.append(f"decisions.json: n_bridges ({n_bridges}) != "
+                          f"bridges.geojson features ({geo_total})")
+        if n_not_monitored != geo_not:
+            errors.append(f"decisions.json: n_not_monitored "
+                          f"({n_not_monitored}) != not-monitored features "
+                          f"in bridges.geojson ({geo_not})")
+        if n_monitored != geo_total - geo_not:
+            errors.append(f"decisions.json: n_monitored ({n_monitored}) != "
+                          f"monitored features in bridges.geojson "
+                          f"({geo_total - geo_not})")
     return errors
 
 
@@ -577,6 +611,14 @@ def self_test() -> int:
             dec_path.write_text(json.dumps(dec))
             (data_dir / "memos" / "2999-01-01.md").write_text("# future memo\n")
             return
+        if kind == "counts-mismatch":
+            # Break the phase-7a count sum: n_monitored + 1 no longer sums
+            # to n_bridges and no longer matches bridges.geojson.
+            dec_path = data_dir / "decisions.json"
+            dec = json.loads(dec_path.read_text())
+            dec["n_monitored"] = int(dec["n_monitored"]) + 1
+            dec_path.write_text(json.dumps(dec))
+            return
         dec_path = data_dir / "decisions.json"
         dec = json.loads(dec_path.read_text())
         cutoffs = dec["cutoffs"]
@@ -624,7 +666,7 @@ def self_test() -> int:
              "scatterer-array-len", "s1-corner-outside",
              "whole-period-newfile",
              "memo-listed-without-file", "memo-file-unlisted",
-             "memo-after-last"]
+             "memo-after-last", "counts-mismatch"]
     failed = False
     for kind in kinds:
         tmp_data = _copy_data(data_src)

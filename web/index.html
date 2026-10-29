@@ -6,6 +6,8 @@
 <title>RadarTwin Dresden — bridge watchlist hindcast</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link href="story.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <style>
 :root {
   --bg: #ffffff; --panel: #f6f8fa; --card: #ffffff;
@@ -36,13 +38,12 @@ header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70
 .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
 .slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; }
 .slider-wrap input[type="range"] { flex: 1; min-width: 160px; }
-#ticker { flex: 0 0 100%; font-size: 13px; color: var(--muted); min-height: 1.2em; }
 #cutoffLabel { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 7em; }
 #eventBadge { visibility: hidden; background: #7f1d1d; color: #fff; border-radius: 4px;
   padding: 3px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 #eventBadge.show { visibility: visible; }
 .basemap-toggle { display: flex; gap: 6px; }
-.basemap-toggle button, .pill-btn, #btnPlay { border: 1px solid var(--border); background: var(--card);
+.basemap-toggle button, .pill-btn, #btnPlay, #btnCC { border: 1px solid var(--border); background: var(--card);
   color: var(--text); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
 .basemap-toggle button.active { border-color: var(--accent); color: var(--accent);
   font-weight: 600; }
@@ -155,7 +156,7 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
   border-top: 1px solid var(--border); }
 </style>
 </head>
-<body>
+<body data-mode="story">
 <a class="skip-link" href="#ranking">Skip to ranking</a>
 <header>
   <h1>RadarTwin Dresden — bridge watchlist hindcast</h1>
@@ -166,11 +167,18 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
     <div class="slider-wrap">
       <label for="slider">Month</label>
       <input id="slider" type="range" min="0" max="32" value="32" step="1">
+      <div id="scrubWrap">
+        <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Story timeline">
+        <div id="chapters"></div>
+        <div id="monthTicks" hidden></div>
+      </div>
       <span id="cutoffLabel">2024-09-01</span>
       <span id="eventBadge">Carolabrücke collapsed ?? days after this cutoff (11 Sep 2024)</span>
       <button id="btnPlay" type="button" aria-pressed="false">Play</button>
+      <button id="btnCC" type="button" class="active" aria-pressed="true" title="Toggle captions">CC</button>
     </div>
-    <div id="ticker" aria-live="polite"></div>
+    <div id="headline" aria-live="polite"></div>
+    <div id="historyStrip" hidden>History strip (phase 7b): one row per bridge, one cell per month.</div>
     <div class="basemap-toggle" role="group" aria-label="Basemap">
       <button id="btnImagery" type="button" aria-pressed="false">Imagery</button>
       <button id="btnDark" class="active" type="button" aria-pressed="true">Dark</button>
@@ -181,10 +189,39 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
       <button id="btnRadar" type="button" aria-pressed="false" title="Sentinel-1 amplitude chip around Carolabrücke">Radar</button>
       <button id="btnMemo" type="button" aria-expanded="false" disabled title="no memo for this month">Memo</button>
     </div>
+    <div class="basemap-toggle" role="group" aria-label="Mode">
+      <button id="btnExploreStory" type="button">Explore this month</button>
+      <button id="btnWatchStory" type="button">Watch the story</button>
+    </div>
   </div>
 </header>
 <main>
-  <div id="map"></div>
+  <div id="map">
+    <div id="storyLanding">
+      <h2>RadarTwin Dresden</h2>
+      <p>Three years of satellite radar over 20 bridges — and the month the data flagged one for inspection.</p>
+      <button id="storyPlay" type="button" disabled>Play</button>
+    </div>
+    <div id="sceneTitle" hidden><strong>RadarTwin Dresden</strong><span>A bridge watchlist hindcast, Jan 2022 – Sep 2024</span></div>
+    <div id="sceneCover" hidden><span>How radar sees — the animated explainer arrives in phase 7c.</span></div>
+    <div id="sceneDim" hidden></div>
+    <div id="caption"></div>
+    <div id="captionLive" class="visually-hidden" aria-live="polite"></div>
+    <div id="sceneTag" hidden></div>
+    <div id="storyCallouts"></div>
+    <div id="dateRoll" hidden></div>
+    <div id="storyEnd" hidden>
+      <div class="story-end-card">
+        <p id="storyEndLine1"></p>
+        <p id="storyEndLine2"></p>
+        <div class="story-end-actions">
+          <button id="btnReplay" type="button">Replay</button>
+          <button id="btnExploreEnd" type="button">Explore this month</button>
+        </div>
+      </div>
+    </div>
+    <div id="hoverLabel" hidden></div>
+  </div>
   <aside id="side">
     <div class="legend" id="legend">
       <span><span class="sw" style="background:#4b5563"></span>none</span>
@@ -221,6 +258,7 @@ let CUT = [], DEC = {}, BRIDGES = [], SPANS = {}, OWNER = {}, EVENT_DATE = "", E
 let ID2NAME = {}, NAME2ID = {}, BRIDGE_PROPS = {};
 let map = null, selectedId = "4", cutoffIdx = 32;
 let EVENT_ASSET = "Carolabrücke";
+let N_BRIDGES = 0, N_MONITORED = 0, N_NOT_MONITORED = 0;
 let spanPopup = null, scatPopup = null, samPopup = null;
 let SCAT = null, SCAT_V = {}, S1_COORDS = null;
 let MEMO_CUTOFFS = [], memoOpen = false, memoReq = 0;
@@ -328,33 +366,32 @@ function setLayerVisible(btnId, layerId, visible) {
   }
 }
 
-function updateTicker(cutoff) {
+// Headline card (phase 7a, replaces the phase-5e ticker): the top
+// model-high bridge by rank, mirroring the map colours. The reason prefers
+// the rubric's own reason field, else phrases the flags (story.js).
+function updateHeadline(cutoff) {
   const table = DEC[cutoff] || {};
-  const highs = [];
+  let top = null;
   for (const bid of Object.keys(ID2NAME)) {
     const d = table[bid];
     if (d && d.model && d.model.risk === "high") {
       const rk = (d.rank === null || d.rank === undefined) ? 999 : d.rank;
-      highs.push({ rank: rk, name: ID2NAME[bid] });
+      if (!top || rk < top.rank || (rk === top.rank && ID2NAME[bid] < top.name)) {
+        top = { rank: rk, name: ID2NAME[bid], d };
+      }
     }
   }
-  highs.sort((a, b) => (a.rank - b.rank) || a.name.localeCompare(b.name));
-  const names = highs.map((h) => h.name);
-  $("ticker").textContent =
-    `${monthName(cutoff)} \u00b7 ${highs.length} high \u00b7 ${names.length ? names.join(", ") : "none high"}`;
-}
-
-function collapseMoment() {
-  try { setLayerVisible("btnRadar", "s1-raster", true); } catch (e) {}
-  try { setLayerVisible("btnSam", "sam-lines", true); } catch (e) {}
-  const carolaId = NAME2ID[EVENT_ASSET] || NAME2ID["Carolabrücke"];
-  if (!carolaId || !ID2NAME[carolaId]) return;
-  selectBridge(carolaId, { fly: false });
-  if (!REDUCED && map && CENTROIDS[carolaId]) {
-    try {
-      map.flyTo({ center: CENTROIDS[carolaId], zoom: 15.5, duration: 1500 });
-    } catch (e) {}
+  const label = monthName(cutoff);
+  let title, reason = "";
+  if (!top) {
+    title = `${label} — nothing unusual.`;
+  } else {
+    title = `${label} — ${top.name} needs an inspector.`;
+    const own = top.d.reason ? String(top.d.reason).trim() : "";
+    reason = own || ((typeof reasonFromFlags === "function") ? reasonFromFlags(top.d.flags || {}) : "");
   }
+  $("headline").innerHTML = `<span class="headline-title">${esc(title)}</span>` +
+    (reason ? `<span class="headline-reason">${esc(reason)}</span>` : "");
 }
 
 function setPlaying(on) {
@@ -370,10 +407,11 @@ function setPlaying(on) {
     btn.textContent = "Pause";
     btn.setAttribute("aria-pressed", "true");
     if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    // Explore month replay. The phase-5e collapse moment now lives in
+    // story scene 9, so reaching the end just stops.
     playTimer = setInterval(() => {
       if (cutoffIdx >= CUT.length - 1) {
         setPlaying(false);
-        collapseMoment();
         return;
       }
       cutoffIdx++;
@@ -381,7 +419,6 @@ function setPlaying(on) {
       applyCutoff();
       if (cutoffIdx >= CUT.length - 1) {
         setPlaying(false);
-        collapseMoment();
       }
     }, 700);
   } else {
@@ -439,7 +476,7 @@ function initMap() {
           layout: { visibility: darkInit ? "visible" : "none" } }
       ]
     },
-    center: [13.745, 51.057], zoom: REDUCED ? 12 : 11
+    center: [13.745, 51.057], zoom: REDUCED ? 12 : 11, pitch: 55
   });
   map.addControl(new maplibregl.NavigationControl(), "top-left");
   map.on("load", () => {
@@ -541,11 +578,19 @@ function initMap() {
       paint: { "circle-color": riskExpr, "circle-radius": 8, "circle-opacity": 0.9,
         "circle-color-transition": { duration: DUR_BRIDGE },
         "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
+    const storyOrSelect = (bid) => {
+      // In Story mode a bridge click pauses and opens Explore on it.
+      if (document.body.dataset.mode === "story" && typeof StoryBridgeClick === "function") {
+        StoryBridgeClick(bid);
+      } else {
+        selectBridge(bid);
+      }
+    };
     map.on("click", "bridges-fill", (e) => {
-      if (e.features && e.features.length) selectBridge(String(e.features[0].properties.id));
+      if (e.features && e.features.length) storyOrSelect(String(e.features[0].properties.id));
     });
     map.on("click", "bridges-markers", (e) => {
-      if (e.features && e.features.length) selectBridge(String(e.features[0].properties.id));
+      if (e.features && e.features.length) storyOrSelect(String(e.features[0].properties.id));
     });
     map.on("click", "spans-circles", (e) => {
       if (!e.features || !e.features.length) return;
@@ -617,6 +662,8 @@ function initMap() {
   $("btnMemoClose").onclick = () => { closeMemo(); $("btnMemo").focus(); };
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && memoOpen) { closeMemo(); $("btnMemo").focus(); }
+    else if (e.key === "Escape" && document.body.dataset.mode === "story" &&
+        typeof StoryToExplore === "function") { StoryToExplore(); }
   });
 }
 
@@ -626,7 +673,7 @@ function applyCutoff() {
   $("rankCutoff").textContent = cutoff;
   $("slider").value = String(cutoffIdx);
   $("slider").setAttribute("aria-valuetext", monthName(cutoff));
-  updateTicker(cutoff);
+  updateHeadline(cutoff);
   // Event badge: only on the cutoff whose month contains the event date.
   // The day count is computed from the dates. The badge slot is always
   // reserved (visibility), so the slider never changes width.
@@ -911,6 +958,9 @@ async function boot() {
   S1_COORDS = s1.coordinates || null;
   EVENT_DATE = dec.event_date || ""; EVENT_MONTH = EVENT_DATE.slice(0, 7) + "-01";
   EVENT_ASSET = dec.event_asset || "Carolabrücke";
+  N_BRIDGES = dec.n_bridges || 0;
+  N_MONITORED = dec.n_monitored || 0;
+  N_NOT_MONITORED = dec.n_not_monitored || 0;
   if (EVENT_DATE && EVENT_MONTH) {
     $("eventBadge").textContent = eventBadgeText(EVENT_MONTH);
   }
@@ -927,14 +977,31 @@ async function boot() {
     if (playing) setPlaying(false);
     cutoffIdx = Number(slider.value); applyCutoff();
   };
-  $("btnPlay").onclick = () => setPlaying(!playing);
+  $("btnPlay").onclick = () => {
+    // The old Play button is the story's Play in Story mode; in Explore
+    // it replays months as before.
+    if (document.body.dataset.mode === "story" && typeof StoryTogglePlay === "function") {
+      StoryTogglePlay();
+    } else {
+      setPlaying(!playing);
+    }
+  };
   initMap();
   applyCutoff();
+  window.dispatchEvent(new Event("radartwin:ready"));
+  if (!window.__storyReady) {
+    // Story unavailable (story.js or the GSAP CDN failed): the dashboard
+    // still works, so fall back to Explore.
+    document.body.dataset.mode = "explore";
+    const landing = document.getElementById("storyLanding");
+    if (landing) landing.setAttribute("hidden", "");
+  }
 }
 boot().catch((e) => {
   document.getElementById("detail").innerHTML =
     `<p>Failed to load map data: ${esc(e.message)}. Serve <code>web/</code> over HTTP (see README) rather than opening the file directly.</p>`;
 });
 </script>
+<script src="story.js"></script>
 </body>
 </html>

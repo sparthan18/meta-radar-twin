@@ -509,8 +509,14 @@ Nothing in it shows data after the selected cutoff; all motion is off under
 
 **Phase 5f (optional, if time allows):** a three.js close-up of the selected bridge: the deck as a
 slab, spans displaced by their anomaly at the selected cutoff (exaggerated, labelled as such), from
-`spans.json` only. Deployment only after the owner approves the host; a live "Run audit" button
-needs a hosted service and stays out unless approved.
+`spans.json` only.
+
+**Phase 7 (story mode):** the page opens as a nine-scene piece that plays on the page itself (camera,
+captions, annotations, a 3D bridge), with the dashboard as Explore mode one click away. The scene
+specification, director rules and phase split (7a–7d) are in `docs/story-spec.md`; every scene
+reads only its bound cutoff. Libraries: GSAP 3 and three.js, pinned from cdnjs. Deployment only
+after the owner approves the host; a live "Run audit" button needs a hosted service and stays out
+unless approved.
 
 ## 10. Event-week order (rubric-weighted)
 1. SAM 3.1 on the Dresden chip + IoU vs OSM; Muse Image 10-min test.

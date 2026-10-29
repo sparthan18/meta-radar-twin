@@ -201,6 +201,10 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 - **What you see:** selecting a bridge calls `scrollIntoView` on the detail; at desktop width the page itself scrolls 28 px and the title is clipped, because every scrollable ancestor moves. Scrolling "just enough" to show the detail's bottom then hides its heading when the detail is taller than the panel.
 - **Fix:** at desktop width set `#side.scrollTop` yourself; align the detail's top when it is taller than the panel. Keep `scrollIntoView` only for the phone layout, where the page is meant to scroll.
 
+### A background tab stops the story's clock
+- **What you see:** reviewing the story in a browser tab that is not in front, nothing advances: no orbit, captions late, the same scene for a minute, while seeking works. GSAP's ticker runs on `requestAnimationFrame`, which browsers pause for hidden tabs; `setInterval` (the old replay) only slows down.
+- **Fix:** test the story in the fronted tab with the window visible, and read state from the DOM. The page is fine; the test was not.
+
 ## Environment
 
 - Python 3.14 has no wheels for rasterio or geopandas, so the project pins 3.12.

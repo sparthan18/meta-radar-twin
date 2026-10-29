@@ -271,12 +271,18 @@ def main() -> int:
                 owner[name] = {"condition": cond,
                                "source": str(r["condition_source"])}
         decisions[cutoff] = per
+    # Phase 7a: story scene 3 ("twenty-bridges") needs the monitored /
+    # not-monitored split. n_bridges is the city total; the checker verifies
+    # n_monitored + n_not_monitored == n_bridges.
+    n_monitored = int(len(bridges_state))
+    n_not_monitored = int(len(dropped_names))
     (WEB_DATA / "decisions.json").write_text(json.dumps({
         "site": SITE_SLUG,
         "event_date": event_date,
         "event_asset": EVENT_ASSET,
-        "n_bridges": int(len(bridges_state)),
-        "n_not_monitored": int(len(dropped_names)),
+        "n_bridges": n_monitored + n_not_monitored,
+        "n_monitored": n_monitored,
+        "n_not_monitored": n_not_monitored,
         "cutoffs": cutoffs,
         "decisions": decisions,
         "owner": owner,
