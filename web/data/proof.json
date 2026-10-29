@@ -1,0 +1,58 @@
+{
+  "cutoff": "2024-09-01",
+  "quantities": {
+    "roll": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "score": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "z": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "wmax": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "wspread": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "velocity": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "coherence": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "span_meta": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "flags": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    },
+    "risk": {
+      "pass": true,
+      "max_abs_diff": 0.0
+    }
+  },
+  "carola": {
+    "bridge": "Carolabr\u00fccke",
+    "score_full": 5.034772069142343,
+    "score_trunc": 5.034772069142343,
+    "z_full": 4.430439698622063,
+    "z_trunc": 4.430439698622063
+  },
+  "agreement": {
+    "agree": 33,
+    "total": 33,
+    "n": 33,
+    "m": 33
+  }
+}

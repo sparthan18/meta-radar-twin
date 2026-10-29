@@ -10,7 +10,10 @@ const {
   orderBridgesByRank, scene3LitCount,
   firstLevelHits, buildScenes, sceneBounds, totalDuration,
   sceneIndexAtTime, scene4Allowed, captionDataFor,
-  captionIndexAtLocalTime, captionAtTime, storyOrbitBearing
+  captionIndexAtLocalTime, captionAtTime, storyOrbitBearing,
+  memoTypedChars, memoHighlightRange, revealedCount, renderedTextLength,
+  revealNodes, renderedHighlightRange, proofCountValue, proofChecksShown,
+  europeLitCount
 } = story;
 
 let failures = 0;
@@ -152,14 +155,12 @@ check("scene-3 one bridge per 0.25 s",
   scene3LitCount(6.75, 20) === 20);
 check("scene-3 clamps at the total", scene3LitCount(99, 20) === 20);
 check("planted: instant light-up is caught", scene3LitCount(0, 20) !== 20);
-check("7b scenes 3/5/6 are real",
-  story.STORY_PLACEHOLDERS["twenty-bridges"] === undefined &&
-  story.STORY_PLACEHOLDERS["august"] === undefined &&
-  story.STORY_PLACEHOLDERS["september"] === undefined);
-check("7b scenes 2/7/8 stay placeholders",
-  story.STORY_PLACEHOLDERS["how-radar-sees"] === true &&
-  story.STORY_PLACEHOLDERS["the-report"] === true &&
-  story.STORY_PLACEHOLDERS["the-proof"] === true);
+check("7c no placeholders remain",
+  Object.keys(story.STORY_PLACEHOLDERS).length === 0);
+check("7c scenes 2/7/8 are real",
+  story.STORY_PLACEHOLDERS["how-radar-sees"] === undefined &&
+  story.STORY_PLACEHOLDERS["the-report"] === undefined &&
+  story.STORY_PLACEHOLDERS["the-proof"] === undefined);
 check("7b timing constants",
   story.STORY_SCENE3_FLY === 2.0 && story.STORY_SCENE3_GAP === 0.25 &&
   story.STORY_SCENE6_ORBIT === 6.0 && story.STORY_GLOW_PULSE === 1.2);
@@ -292,6 +293,232 @@ check("orbit bearing holds 20 deg after 6 s",
   storyOrbitBearing(20, story.STORY_SCENE6_ORBIT, 11) === 20);
 check("orbit bearing starts at 0",
   storyOrbitBearing(20, story.STORY_SCENE6_ORBIT, 0) === 0);
+
+// --- phase 7c: scene-7 typing + highlight ---
+check("memo typing 40 chars/s",
+  memoTypedChars(0, 100) === 0 && memoTypedChars(1, 100) === 40 &&
+  memoTypedChars(2.5, 100) === 100 && memoTypedChars(99, 100) === 100);
+check("planted: instant typing is caught", memoTypedChars(0, 100) !== 100);
+const MEMO_FIX = "# Memo\n\n## Verdict\nCarolabrücke needs prompt inspection now. Radar shows motion.\n\n## Owner condition\n- Carolabrücke — external input: overlay poor.\n";
+const MEMO_HL = memoHighlightRange(MEMO_FIX);
+check("highlight finds the prompt-inspection sentence",
+  MEMO_HL && MEMO_FIX.slice(MEMO_HL.start, MEMO_HL.end).indexOf("prompt inspection") !== -1);
+check("highlight is one sentence",
+  MEMO_HL && MEMO_FIX.slice(MEMO_HL.start, MEMO_HL.end) === "Carolabrücke needs prompt inspection now.");
+const MEMO_NOVERDICT = "# Memo\n\n## Verdict\nAll quiet this month. Nothing else.\n";
+const MEMO_FB = memoHighlightRange(MEMO_NOVERDICT);
+check("highlight falls back to the first Verdict sentence",
+  MEMO_FB && MEMO_NOVERDICT.slice(MEMO_FB.start, MEMO_FB.end) === "All quiet this month.");
+const MEMO_OWNER = "# Memo\n\n## Verdict\nAll quiet.\n\n## Owner condition\n- prompt inspection of the tram section.\n";
+check("highlight never matches the Owner section",
+  (() => { const r = memoHighlightRange(MEMO_OWNER);
+    return r && MEMO_OWNER.slice(r.start, r.end) === "All quiet."; })());
+check("planted: owner highlight is caught",
+  (() => { const r = memoHighlightRange(MEMO_OWNER);
+    return !r || MEMO_OWNER.slice(r.start, r.end).indexOf("tram") === -1; })());
+
+// --- phase 7c fix: rendered reveal types HTML, not markdown ---
+check("revealedCount 40 chars/s",
+  revealedCount(0) === 0 && revealedCount(1) === 40 && revealedCount(2.5) === 100);
+check("revealedCount clamps to total",
+  revealedCount(99, 100) === 100 && revealedCount(1, 100) === 40 &&
+  revealedCount(0, 100) === 0);
+check("planted: instant reveal is caught", revealedCount(0, 100) !== 100);
+
+function T(t) { return { nodeType: 3, textContent: t, data: t }; }
+function E(tag, kids) {
+  return { nodeType: 1, tagName: String(tag).toUpperCase(),
+    childNodes: kids || [], style: {} };
+}
+function fakeVisibleText(root) {
+  let s = "";
+  const walk = (node) => {
+    if (!node) return;
+    if (node.nodeType === 3) {
+      const t = String(node.textContent || "");
+      if (/^\s*$/.test(t)) return;
+      s += t;
+    } else if (node.nodeType === 1) {
+      for (const k of (node.childNodes || [])) walk(k);
+    }
+  };
+  walk(root);
+  return s;
+}
+function fakeShown(el) { return !el.style || el.style.display !== "none"; }
+// Small rendered fixture (H1 and Cutoff already skipped, as the panel does).
+function makeRenderedFixture(verdictPara) {
+  const hVerdict = E("H2", [T("Verdict")]);
+  const pVerdict = E("P", [T(verdictPara ||
+    "Carolabrücke needs prompt inspection now. Radar shows motion.")]);
+  const hAction = E("H2", [T("Action list")]);
+  const th1 = E("TH", [T("bridge")]);
+  const th2 = E("TH", [T("risk")]);
+  const trHead = E("TR", [th1, th2]);
+  const thead = E("THEAD", [T("\n"), trHead, T("\n")]);
+  const td1 = E("TD", [T("Carolabrücke")]);
+  const td2 = E("TD", [T("high")]);
+  const trBody = E("TR", [td1, td2]);
+  const tbody = E("TBODY", [T("\n"), trBody, T("\n")]);
+  const table = E("TABLE", [T("\n"), thead, T("\n"), tbody, T("\n")]);
+  const hOwner = E("H2", [T("Owner condition")]);
+  const liOwner = E("LI", [T("prompt inspection of the tram section.")]);
+  const ulOwner = E("UL", [T("\n"), liOwner, T("\n")]);
+  const root = E("DIV", [
+    hVerdict, T("\n"), pVerdict, T("\n"), hAction, T("\n"),
+    table, T("\n"), hOwner, T("\n"), ulOwner, T("\n")
+  ]);
+  return { root, hVerdict, pVerdict, hAction, table, thead, trHead,
+    th1, th2, tbody, trBody, td1, td2, hOwner, ulOwner, liOwner };
+}
+const FIX_S1 = "Carolabrücke needs prompt inspection now.";
+check("rendered total is 158 chars",
+  renderedTextLength(makeRenderedFixture().root) === 158);
+check("reveal of nothing shows nothing",
+  (() => { const f = makeRenderedFixture();
+    const shown = revealNodes(f.root, 0);
+    return shown === 0 && fakeVisibleText(f.root) === "" &&
+      !fakeShown(f.hVerdict) && !fakeShown(f.pVerdict) &&
+      !fakeShown(f.table); })());
+check("reveal of 7 chars shows only the Verdict heading",
+  (() => { const f = makeRenderedFixture();
+    revealNodes(f.root, 7);
+    return fakeVisibleText(f.root) === "Verdict" &&
+      fakeShown(f.hVerdict) && !fakeShown(f.pVerdict) &&
+      !fakeShown(f.hAction) && !fakeShown(f.table); })());
+check("whitespace separators never consume the budget",
+  (() => { const f = makeRenderedFixture();
+    revealNodes(f.root, 8);
+    return fakeVisibleText(f.root) === "VerdictC"; })());
+const RAW_FIX_SMALL = "# Memo\n\nCutoff 2024-09-01\n\n## Verdict\n" +
+  "Carolabrücke needs prompt inspection now. Radar shows motion.\n\n" +
+  "## Action list\n| bridge | risk |\n| --- | --- |\n" +
+  "| Carolabrücke | high |\n\n## Owner condition\n" +
+  "- prompt inspection of the tram section.\n";
+check("planted: raw slicing leaks # and | markers",
+  RAW_FIX_SMALL.slice(0, 10).indexOf("#") !== -1 &&
+  RAW_FIX_SMALL.slice(0, 160).indexOf("|") !== -1);
+check("rendered reveal leaks no markers and starts at Verdict",
+  (() => { const f = makeRenderedFixture();
+    revealNodes(f.root, 120);
+    const vis = fakeVisibleText(f.root);
+    return vis.indexOf("#") === -1 && vis.indexOf("|") === -1 &&
+      vis.indexOf("Verdict") === 0 &&
+      vis.indexOf("Carolabrücke needs prompt inspection now.") !== -1; })());
+check("table row appears when its first cell is reached",
+  (() => { const f = makeRenderedFixture();
+    revealNodes(f.root, 79);
+    const before = !fakeShown(f.table) && !fakeShown(f.trHead) &&
+      !fakeShown(f.trBody);
+    const g = makeRenderedFixture();
+    revealNodes(g.root, 80);
+    const after = fakeShown(g.table) && fakeShown(g.trHead) &&
+      fakeShown(g.th1) && !fakeShown(g.th2) && !fakeShown(g.trBody);
+    const h = makeRenderedFixture();
+    revealNodes(h.root, 90);
+    const bodyRow = fakeShown(h.trBody) && fakeShown(h.td1);
+    return before && after && bodyRow; })());
+const FIX_HL = renderedHighlightRange(makeRenderedFixture().root);
+check("rendered highlight finds the prompt-inspection sentence",
+  FIX_HL && FIX_HL.sentence === FIX_S1 &&
+  FIX_HL.start === 7 && FIX_HL.end === 48);
+check("rendered highlight completes at 48 chars",
+  FIX_HL && FIX_HL.end === 7 + FIX_S1.length);
+check("rendered highlight never matches the Owner section",
+  FIX_HL && FIX_HL.sentence.indexOf("tram") === -1);
+check("planted: rendered owner highlight is caught",
+  (() => { const r = renderedHighlightRange(makeRenderedFixture().root);
+    return !r || r.sentence.indexOf("tram section") === -1; })());
+check("rendered highlight falls back to the first Verdict sentence",
+  (() => { const f = makeRenderedFixture("All quiet this month. Nothing else.");
+    const r = renderedHighlightRange(f.root);
+    return r && r.sentence === "All quiet this month." &&
+      r.start === 7 && r.sentence.indexOf("tram") === -1; })());
+check("4.5 s into scene 7 (180 chars) covers the highlight",
+  revealedCount(4.5) === 180 && FIX_HL && 180 >= FIX_HL.end);
+console.log(`  info: fixture highlight completes at ${FIX_HL ? FIX_HL.end : "?"} chars`);
+check("real memo highlight completes at 83 chars",
+  (() => {
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      const memo = require("../web/memo.js");
+      const md = fs.readFileSync(path.join(__dirname, "..", "web",
+        "data", "memos", "2024-09-01.md"), "utf8");
+      const html = memo.renderMemo(md);
+      const texts = [];
+      const re = />([^<]+)</g;
+      let m = null;
+      while ((m = re.exec(html)) !== null) texts.push(m[1]);
+      let vi = -1;
+      for (let i = 0; i < texts.length; i++) {
+        if (texts[i].trim() === "Verdict") { vi = i; break; }
+      }
+      if (vi === -1) return false;
+      let para = "";
+      for (let i = vi + 1; i < texts.length; i++) {
+        if (!/^\s*$/.test(texts[i])) { para = texts[i]; break; }
+      }
+      const phrase = "prompt inspection";
+      const pi = para.indexOf(phrase);
+      if (pi === -1) return false;
+      let a = pi;
+      while (a > 0 && ".?!\n".indexOf(para[a - 1]) === -1) a--;
+      while (a < para.length && (para[a] === " " || para[a] === "\n")) a++;
+      let b = pi;
+      while (b < para.length && ".?!".indexOf(para[b]) === -1 && para[b] !== "\n") b++;
+      if (b < para.length && ".?!".indexOf(para[b]) !== -1) b++;
+      const sent = para.slice(a, b);
+      const end = "Verdict".length + b;
+      console.log(`  info: real memo highlight completes at ${end} chars`);
+      return end === 83 &&
+        sent === "Carolabrücke is the only bridge that needs prompt inspection at this cutoff.";
+    } catch (e) { return false; }
+  })());
+
+// --- phase 7c: scene-8 proof count-in + checks ---
+check("proof count starts at 0 and settles",
+  proofCountValue(5.03, 0, false) === 0 &&
+  Math.abs(proofCountValue(5.03, 1, false) - 2.515) < 1e-9 &&
+  proofCountValue(5.03, 2, false) === 5.03 &&
+  proofCountValue(5.03, 9, false) === 5.03);
+check("proof count is final under reduced motion",
+  proofCountValue(5.03, 0, true) === 5.03);
+check("proof checks stagger 0.1 s after the count",
+  proofChecksShown(0, 10, false) === 0 &&
+  proofChecksShown(1.9, 10, false) === 0 &&
+  proofChecksShown(2.0, 10, false) === 1 &&
+  proofChecksShown(2.15, 10, false) === 2 &&
+  proofChecksShown(9, 10, false) === 10);
+check("proof checks all show under reduced motion",
+  proofChecksShown(0, 10, true) === 10);
+check("planted: instant checks are caught",
+  proofChecksShown(0, 10, false) !== 10);
+check("proof quantities list",
+  story.STORY_PROOF_QUANTITIES.join(",") ===
+  "roll,score,z,wmax,wspread,velocity,coherence,span_meta,flags,risk");
+
+// --- phase 7c: scene-9 Europe outro ---
+check("europe cities list (15, Dresden last)",
+  story.STORY_EUROPE_CITIES.length === 15 &&
+  story.STORY_EUROPE_CITIES[14].name === "Dresden" &&
+  story.STORY_EUROPE_CITIES.every((c) =>
+    typeof c.lon === "number" && typeof c.lat === "number"));
+check("europe camera constants",
+  story.STORY_EUROPE_ZOOM === 3.8 &&
+  story.STORY_EUROPE_CENTER.join(",") === "12,52" &&
+  story.STORY_EUROPE_AT === 10.0);
+check("europe dots dark before 10 s",
+  europeLitCount(0, 15, 14, false) === 0 &&
+  europeLitCount(9.999, 15, 14, false) === 0);
+check("europe dots light one by one",
+  europeLitCount(10, 15, 14, false) === 1 &&
+  europeLitCount(13.999, 15, 14, false) === 15);
+check("europe dots all lit under reduced motion",
+  europeLitCount(10, 15, 14, true) === 15 &&
+  europeLitCount(0, 15, 14, true) === 0);
+check("planted: instant europe light-up is caught",
+  europeLitCount(0, 15, 14, false) !== 15);
 
 if (failures) {
   console.log(`test_story: FAIL (${failures} failure(s))`);

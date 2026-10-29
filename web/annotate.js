@@ -36,6 +36,15 @@ function formatRankCounter(rank, n, z) {
   return `rank ${r} of ${nn} · z ${zz}`;
 }
 
+// Scene-7 SAM label from sam.geojson ("SAM 3.1 · score {score} · IoU {iou}").
+function formatSamLabel(score, iou) {
+  const s = (score === null || score === undefined || Number.isNaN(Number(score)))
+    ? "—" : Number(score).toFixed(2);
+  const v = (iou === null || iou === undefined || Number.isNaN(Number(iou)))
+    ? "—" : Number(iou).toFixed(2);
+  return `SAM 3.1 · score ${s} · IoU ${v}`;
+}
+
 // projectPath(points, project): apply a screen projection to lon/lat
 // points. Accepts [lon,lat] pairs or {lon,lat}/{lng,lat} objects;
 // project(lon,lat) returns {x,y} or [x,y]. Invalid entries map to null.
@@ -253,6 +262,8 @@ let annotateWired = false;
 let annotateSeq = 0;
 let annotateDrawn = {};
 let annotateLastView = "";
+let annotateSam = null; // {ring: [[lon,lat]...], label: string} or null
+let annotateSamDrawn = false;
 
 function annotateReduced() {
   try {
@@ -405,6 +416,62 @@ function AnnotateUpdate() {
     try { annotateSvg.appendChild(annotateDrawOne(co, pt, w, h, isNew, placedBoxes)); } catch (e) { /* ignore */ }
     annotateDrawn[co.id] = true;
   }
+  if (annotateSam) {
+    try { annotateDrawSam(w, h); } catch (e) { /* ignore */ }
+  }
+}
+
+// Scene-7 SAM outline: the polygon ring projected to screen, drawn with a
+// 1.2 s stroke-dashoffset on first show (instant under reduced motion),
+// plus the "SAM 3.1 · score · IoU" label above its centroid.
+function annotateDrawSam(mapW, mapH) {
+  const ring = (annotateSam && annotateSam.ring) || [];
+  const pts = [];
+  for (const c of ring) {
+    const lon = Array.isArray(c) ? c[0] : (c && (c.lon !== undefined ? c.lon : c.lng));
+    const lat = Array.isArray(c) ? c[1] : (c && c.lat);
+    const pt = annotateProject(lon, lat);
+    if (pt) pts.push(pt);
+  }
+  if (pts.length < 3) return;
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)}`;
+  d += " Z";
+  const path = annotateSvgEl("path", { d, "class": "annotate-sam" });
+  annotateSvg.appendChild(path);
+  const isNew = !annotateSamDrawn;
+  annotateSamDrawn = true;
+  const reduced = annotateReduced();
+  if (isNew && !reduced && annotateHasGsap()) {
+    let len = 0;
+    try { len = path.getTotalLength(); } catch (e) { len = 0; }
+    if (!(len > 0)) {
+      len = 1;
+      for (let i = 1; i < pts.length; i++) {
+        len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      }
+    }
+    try {
+      path.style.strokeDasharray = String(len);
+      path.style.strokeDashoffset = String(len);
+      gsap.to(path.style, { strokeDashoffset: 0, duration: 1.2, ease: "power2.out" });
+    } catch (e) {
+      try { path.style.strokeDashoffset = "0"; } catch (e2) { /* ignore */ }
+    }
+  } else {
+    try { path.style.strokeDashoffset = "0"; } catch (e) { /* ignore */ }
+  }
+  if (annotateSam.label) {
+    let cx = 0, cy = 0;
+    for (const p of pts) { cx += p.x; cy += p.y; }
+    cx /= pts.length; cy /= pts.length;
+    const lx = Math.max(8, Math.min(mapW - 8, cx));
+    const ly = Math.max(16, Math.min(mapH - 8, cy - 12));
+    const t = annotateSvgEl("text", { x: String(lx.toFixed(1)), y: String(ly.toFixed(1)),
+      "class": "annotate-sam-label", "text-anchor": "middle" });
+    t.textContent = annotateSam.label;
+    annotateSvg.appendChild(t);
+  }
 }
 
 function AnnotateInit(mapInstance, container) {
@@ -446,12 +513,34 @@ function AnnotateClear(prefix) {
   if (!prefix) {
     annotateCallouts = [];
     annotateDrawn = {};
+    annotateSam = null;
+    annotateSamDrawn = false;
   } else {
     annotateCallouts = annotateCallouts.filter((c) => String(c.id).indexOf(prefix) !== 0);
     for (const k of Object.keys(annotateDrawn)) {
       if (k.indexOf(prefix) === 0) delete annotateDrawn[k];
     }
+    if (prefix === "sam-") {
+      annotateSam = null;
+      annotateSamDrawn = false;
+    }
   }
+  annotateSeq++;
+  annotateLastView = "";
+  AnnotateUpdate();
+}
+
+// Scene-7 SAM outline (ring: [[lon,lat]...] exterior ring, label: text).
+function AnnotateSetSamOutline(ring, label) {
+  annotateSam = { ring: (ring || []).slice(), label: label || "" };
+  annotateSamDrawn = false;
+  annotateSeq++;
+  AnnotateUpdate();
+}
+
+function AnnotateClearSam() {
+  annotateSam = null;
+  annotateSamDrawn = false;
   annotateSeq++;
   annotateLastView = "";
   AnnotateUpdate();
@@ -577,8 +666,8 @@ function AnnotateRenderSideView(svg, spans, cutoffIdx, lenM, opts) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    formatCounter, formatSpanValue, formatRankCounter, projectPath,
-    placeLabel, spanColor, riskColor, fastestSpan, deckGeometry,
-    exploreCalloutsFor
+    formatCounter, formatSpanValue, formatRankCounter, formatSamLabel,
+    projectPath, placeLabel, spanColor, riskColor, fastestSpan,
+    deckGeometry, exploreCalloutsFor
   };
 }

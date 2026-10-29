@@ -22,7 +22,9 @@ it must fail truncation.
 """
 from __future__ import annotations
 
+import json
 import pickle
+import re
 import sys
 from pathlib import Path
 
@@ -220,19 +222,21 @@ def _frames_equal(a: pd.DataFrame | pd.Series, b) -> tuple[bool, float]:
 
 def check_cutoff(test_cutoff: str, use_egms_columns: bool = False,
                  drop_banned: bool | list = False,
-                 plant_future: bool = False) -> tuple[bool, dict]:
+                 plant_future: bool = False,
+                 _trunc_state: dict | None = None) -> tuple[bool, dict]:
     """Compare a truncated rerun to the full leakfree run at ``test_cutoff``.
 
     Returns (passed, details). ``details`` maps quantity -> (ok, info).
+    ``_trunc_state`` reuses a precomputed rerun (same comparison, no recompute).
     """
     with open(LEAKFREE_STATE, "rb") as fh:
         full = pickle.load(fh)
     full_dec = pd.read_csv(ROOT / "out" / "leakfree"
                            / f"decisions_{test_cutoff}.csv")
     try:
-        trunc = rerun_up_to(test_cutoff, use_egms_columns=use_egms_columns,
-                            drop_banned=drop_banned,
-                            plant_future=plant_future)
+        trunc = _trunc_state if _trunc_state is not None else rerun_up_to(
+            test_cutoff, use_egms_columns=use_egms_columns,
+            drop_banned=drop_banned, plant_future=plant_future)
     except KeyError as exc:
         return False, {"rerun": (False, f"KeyError (banned read?): {exc}")}
     trunc_dec = trunc_decisions(trunc, test_cutoff,
@@ -300,6 +304,99 @@ def check_banned(test_cutoff: str, drop: bool | list,
     """Rerun with banned columns dropped; pass = identical (no reads)."""
     return check_cutoff(test_cutoff, use_egms_columns=use_egms_columns,
                         drop_banned=drop)
+
+
+PROOF_QUANTITIES = ("roll", "score", "z", "wmax", "wspread",
+                    "velocity", "coherence", "span_meta", "flags", "risk")
+_DIFF_RE = re.compile(r"max abs diff ([0-9eE+\-.infINF]+)")
+
+
+def _proof_diff(key: str, ok: bool, info: str) -> float:
+    m = _DIFF_RE.search(str(info))
+    if m:
+        try:
+            v = float(m.group(1))
+            if v == float("inf"):
+                return 1e18
+            return v
+        except ValueError:
+            pass
+    return 0.0 if ok else 1.0
+
+
+def _json_num(v) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    import math
+    return f if math.isfinite(f) else None
+
+
+def agreement_high_sets(cutoffs: list[str]) -> tuple[int, int]:
+    """Months where rubric-high and model-high sets are identical.
+
+    Rubric set from out/decisions_<cutoff>.csv (risk_level == high);
+    model set from out/model_decisions_<cutoff>.csv (model_risk_level == high).
+    """
+    agree = 0
+    for cutoff in cutoffs:
+        dec = pd.read_csv(ROOT / "out" / f"decisions_{cutoff}.csv")
+        mod = pd.read_csv(ROOT / "out" / f"model_decisions_{cutoff}.csv")
+        rset = set(dec.loc[dec["risk_level"] == "high", "asset"].tolist())
+        mset = set(mod.loc[mod["model_risk_level"] == "high", "asset"].tolist())
+        if rset == mset:
+            agree += 1
+    return agree, len(cutoffs)
+
+
+def write_proof_json(path: Path) -> int:
+    """Run the existing check for the last cutoff and write proof JSON."""
+    with open(LEAKFREE_STATE, "rb") as fh:
+        full = pickle.load(fh)
+    cutoffs = list(full["cutoffs"])
+    last = cutoffs[-1]
+    try:
+        trunc = rerun_up_to(last)
+    except KeyError as exc:
+        print(f"{last} truncation: FAIL (KeyError: {exc})")
+        return 1
+    ok, details = check_cutoff(last, _trunc_state=trunc)
+    quantities: dict[str, dict] = {}
+    for key in PROOF_QUANTITIES:
+        if key in details:
+            qok, info = details[key]
+            quantities[key] = {"pass": bool(qok),
+                               "max_abs_diff": _proof_diff(key, bool(qok), str(info))}
+        else:
+            quantities[key] = {"pass": False, "max_abs_diff": 1.0}
+    try:
+        score_full = _json_num(full["scores"].loc[last, "Carolabrücke"])
+        z_full = _json_num(full["z"].loc[last, "Carolabrücke"])
+        score_trunc = _json_num(trunc["scores"].loc[last, "Carolabrücke"])
+        z_trunc = _json_num(trunc["z"].loc[last, "Carolabrücke"])
+    except (KeyError, AttributeError):
+        score_full = z_full = score_trunc = z_trunc = None
+    agree, total = agreement_high_sets(cutoffs)
+    payload = {
+        "cutoff": last,
+        "quantities": quantities,
+        "carola": {
+            "bridge": "Carolabrücke",
+            "score_full": score_full,
+            "score_trunc": score_trunc,
+            "z_full": z_full,
+            "z_trunc": z_trunc,
+        },
+        "agreement": {"agree": agree, "total": total, "n": agree, "m": total},
+    }
+    Path(path).write_text(json.dumps(payload, indent=2) + "\n")
+    print(f"{last} truncation: {'PASS' if ok else 'FAIL'}")
+    for key, (qok, info) in details.items():
+        print(f"  {key}: {'ok' if qok else 'MISMATCH'} ({info})")
+    print(f"agreement: {agree} of {total} months")
+    print(f"wrote {path}")
+    return 0 if ok else 1
 
 
 def main(cutoffs: list[str]) -> int:
@@ -384,4 +481,10 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     if "--self-test" in args:
         raise SystemExit(self_test())
+    if "--json" in args:
+        i = args.index("--json")
+        if i + 1 >= len(args):
+            print("--json needs an output path")
+            raise SystemExit(2)
+        raise SystemExit(write_proof_json(Path(args[i + 1])))
     raise SystemExit(main(args or DEFAULT_CUTOFFS))

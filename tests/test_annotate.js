@@ -5,8 +5,8 @@
 //   node tests/test_annotate.js
 const ann = require("../web/annotate.js");
 const {
-  formatCounter, formatSpanValue, formatRankCounter, projectPath,
-  placeLabel, spanColor, riskColor, fastestSpan, deckGeometry,
+  formatCounter, formatSpanValue, formatRankCounter, formatSamLabel,
+  projectPath, placeLabel, spanColor, riskColor, fastestSpan, deckGeometry,
   exploreCalloutsFor
 } = ann;
 
@@ -45,6 +45,14 @@ check("rank counter nulls",
   formatRankCounter(null, 19, null) === "rank — of 19 · z —");
 check("planted: unformatted z is caught",
   formatRankCounter(1, 19, 4.43) !== "rank 1 of 19 · z 4.4");
+
+// --- formatSamLabel (phase 7c) ---
+check("sam label",
+  formatSamLabel(0.77, 0.326) === "SAM 3.1 · score 0.77 · IoU 0.33");
+check("sam label nulls",
+  formatSamLabel(null, null) === "SAM 3.1 · score — · IoU —");
+check("planted: unformatted sam label is caught",
+  formatSamLabel(0.77, 0.326) !== "SAM 3.1 · score 0.77 · IoU 0.326");
 
 // --- projectPath ---
 const mock = (lon, lat) => ({ x: lon * 10, y: lat * 10 });

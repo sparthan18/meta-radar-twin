@@ -121,9 +121,119 @@ body[data-mode="explore"] #historyStrip[hidden] { display: none; }
   position: absolute; inset: 0; z-index: 9;
   display: flex; align-items: center; justify-content: center;
   background: #0e141c; color: #9aa9bc; font-size: 14px;
-  padding: 24px; text-align: center;
+  padding: 0; text-align: center;
 }
 #sceneCover[hidden] { display: none; }
+#sceneCover .explainer-svg { width: 100%; height: 100%; display: block; }
+
+/* ---------- Explainer (phase 7c, scene 2) ---------- */
+.explainer-bg { fill: #0e141c; }
+.explainer-sat { opacity: 1; }
+.explainer-body { fill: #e8eef5; stroke: #5b6b7c; stroke-width: 1; }
+.explainer-panel { fill: #1d4ed8; opacity: 0.85; }
+.explainer-pulse { stroke: #22d3ee; stroke-width: 2; opacity: 0; }
+.explainer-echo { stroke: #eab308; stroke-width: 2; opacity: 0; }
+.explainer-deck { fill: #9aa9bc; }
+.explainer-pillar { fill: #5b6b7c; }
+.explainer-kerb { fill: #f97316; stroke: #fff; stroke-width: 1; }
+.explainer-label { fill: #9aa9bc; font-size: 13px; }
+.explainer-counter {
+  fill: #fff; font-size: 34px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.explainer-axis { stroke: #5b6b7c; stroke-width: 1; }
+.explainer-line { stroke: #7cb3ff; stroke-width: 2; }
+.explainer-dot { fill: #fdae61; stroke: #fff; stroke-width: 1.5; }
+
+/* ---------- Scene 7 memo panel (phase 7c) ---------- */
+#sceneMemo {
+  position: absolute; top: 12px; right: 12px; bottom: 64px; z-index: 13;
+  width: min(400px, 44%);
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; overflow-y: auto;
+}
+#sceneMemo[hidden] { display: none; }
+#sceneMemo h3 { margin: 0 0 6px; font-size: 14px; }
+#sceneMemoBody {
+  font-size: 13px; line-height: 1.45;
+  overflow-wrap: break-word; font-family: inherit;
+}
+#sceneMemoBody h2 { font-size: 14.5px; margin: 8px 0 4px; }
+#sceneMemoBody h2:first-child { margin-top: 0; }
+#sceneMemoBody h3 { font-size: 13.5px; margin: 8px 0 4px; }
+#sceneMemoBody p { margin: 6px 0; }
+#sceneMemoBody table {
+  display: block; overflow-x: auto; border-collapse: collapse;
+  margin: 8px 0; font-size: 12.5px;
+}
+#sceneMemoBody th, #sceneMemoBody td {
+  border: 1px solid var(--border); padding: 3px 8px; text-align: left;
+}
+#sceneMemoBody ul, #sceneMemoBody ol { padding-left: 22px; margin: 6px 0; }
+#sceneMemoBody li { margin-bottom: 2px; }
+#sceneMemoBody mark {
+  background: #fef08a; color: #1c1917; border-radius: 3px;
+  padding: 0 2px;
+}
+@media (prefers-color-scheme: dark) {
+  #sceneMemoBody mark { background: #a16207; color: #fff; }
+}
+
+/* ---------- Scene 8 proof panel (phase 7c) ---------- */
+#sceneProof {
+  position: absolute; inset: 0; z-index: 14;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; pointer-events: none;
+}
+#sceneProof[hidden] { display: none; }
+.proof-card {
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px 24px; max-width: 520px; width: min(520px, 92%);
+  pointer-events: auto;
+}
+.proof-cols { display: flex; gap: 24px; margin-bottom: 10px; }
+.proof-col { flex: 1; }
+.proof-col h4 {
+  margin: 0 0 6px; font-size: 13px; font-weight: 600;
+  color: var(--muted); text-transform: none;
+}
+.proof-val { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.proof-val .proof-k {
+  font-size: 12px; font-weight: 400; color: var(--muted);
+  display: inline-block; min-width: 3.2em;
+}
+.proof-list {
+  list-style: none; margin: 8px 0; padding: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px;
+  font-size: 13px;
+}
+.proof-list li { display: flex; gap: 8px; align-items: baseline; }
+.proof-list .proof-check {
+  display: inline-block; min-width: 1.2em; color: #16a34a;
+  font-weight: 700;
+}
+.proof-foot { font-size: 14px; font-weight: 600; margin-top: 8px; }
+
+/* ---------- Scene 9 Europe footnote (phase 7c) ---------- */
+#sceneEuropeNote {
+  position: absolute; right: 12px; bottom: 12px; z-index: 15;
+  font-size: 11.5px; color: #cfd8e3;
+  background: rgba(10, 14, 20, 0.72);
+  padding: 3px 10px; border-radius: 4px;
+  pointer-events: none;
+}
+#sceneEuropeNote[hidden] { display: none; }
+
+/* ---------- SAM outline draw (phase 7c, scene 7) ---------- */
+.annotate-sam {
+  fill: none; stroke: #22d3ee; stroke-width: 2.5;
+}
+.annotate-sam-label {
+  fill: #fff; font-size: 12.5px; font-weight: 600;
+  paint-order: stroke; stroke: rgba(10, 14, 20, 0.85); stroke-width: 4px;
+}
 #sceneDim {
   position: absolute; inset: 0; z-index: 9;
   background: rgba(8, 12, 18, 0.72); pointer-events: none;
@@ -295,4 +405,12 @@ body.story-reduced .annotate-line { transition: none; }
   .annotate-title { font-size: 11.5px; }
   .annotate-sub { font-size: 11px; }
   .annotate-counter { font-size: 13px; }
+  #sceneMemo {
+    top: auto; bottom: 52px; right: 8px; left: 8px; width: auto;
+    max-height: 44%;
+  }
+  .proof-card { padding: 14px 16px; }
+  .proof-val { font-size: 18px; }
+  .proof-list { grid-template-columns: 1fr; }
+  .explainer-counter { font-size: 26px; }
 }

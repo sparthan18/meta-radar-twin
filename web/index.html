@@ -219,8 +219,29 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
       <button id="storyPlay" type="button" disabled>Play</button>
     </div>
     <div id="sceneTitle" hidden><strong>RadarTwin Dresden</strong><span>A bridge watchlist hindcast, Jan 2022 – Sep 2024</span></div>
-    <div id="sceneCover" hidden><span>How radar sees — the animated explainer arrives in phase 7c.</span></div>
+    <div id="sceneCover" hidden><span>Loading the radar explainer…</span></div>
     <div id="sceneDim" hidden></div>
+    <div id="sceneMemo" hidden aria-label="Inspection memo">
+      <h3 id="sceneMemoTitle">Inspection memo</h3>
+      <div id="sceneMemoBody" aria-live="off"></div>
+    </div>
+    <div id="sceneProof" hidden aria-label="Truncation proof">
+      <div class="proof-card">
+        <div class="proof-cols">
+          <div class="proof-col"><h4>full run</h4>
+            <div class="proof-val"><span class="proof-k">score</span> <span id="proofScoreFull">0.00</span></div>
+            <div class="proof-val"><span class="proof-k">z</span> <span id="proofZFull">0.00</span></div>
+          </div>
+          <div class="proof-col"><h4>future deleted</h4>
+            <div class="proof-val"><span class="proof-k">score</span> <span id="proofScoreTrunc">0.00</span></div>
+            <div class="proof-val"><span class="proof-k">z</span> <span id="proofZTrunc">0.00</span></div>
+          </div>
+        </div>
+        <ul class="proof-list" id="proofList"></ul>
+        <div class="proof-foot" id="proofFoot"></div>
+      </div>
+    </div>
+    <div id="sceneEuropeNote" hidden>cities shown as examples of EGMS coverage</div>
     <div id="caption"></div>
     <div id="captionLive" class="visually-hidden" aria-live="polite"></div>
     <div id="sceneTag" hidden></div>
@@ -270,6 +291,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 <footer>Model: muse-spark-1.3 (5 votes per question) checked against a deterministic rubric. Owner condition is an external input shown only in its own block. Basemap: Esri World Imagery / Esri Canvas World Dark Gray.</footer>
 <script src="annotate.js"></script>
 <script src="memo.js"></script>
+<script src="explainer.js"></script>
 <script>
 "use strict";
 const RISK_COLORS = { none: "#4b5563", watch: "#eab308", elevated: "#f97316",

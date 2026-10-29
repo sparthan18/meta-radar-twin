@@ -42,16 +42,39 @@ const STORY_SCENE_NAMES = {
   "ten-days-later": "Ten days later"
 };
 
-// Scenes 3, 4, 5, 6 and 9 are complete in 7b; the rest are placeholders
-// that show the right cutoff, camera target, layer state and captions.
-const STORY_PLACEHOLDERS = {
-  "title": true, "how-radar-sees": true,
-  "the-report": true, "the-proof": true
-};
+// 7c: every scene is real; no placeholders remain.
+const STORY_PLACEHOLDERS = {};
 const STORY_SCENE3_FLY = 2.0; // seconds of camera pull-back before light-up
 const STORY_SCENE3_GAP = 0.25; // seconds between bridge light-ups
 const STORY_SCENE6_ORBIT = 6.0; // seconds for the 20° orbit
 const STORY_GLOW_PULSE = 1.2; // seconds for the one glow pulse
+const STORY_MEMO_CPS = 40; // scene-7 typing speed, chars per second
+const STORY_PROOF_COUNT = 2.0; // scene-8 seconds counting from zero
+const STORY_PROOF_GAP = 0.1; // scene-8 seconds between check marks
+const STORY_EUROPE_AT = 10.0; // scene-9 local time the Europe pullout starts
+const STORY_EUROPE_ZOOM = 3.8;
+const STORY_EUROPE_CENTER = [12, 52];
+// Illustrative EGMS-covered cities for the scene-9 outro, Dresden last
+// and labelled. Inline lon/lat; the footnote says they are examples.
+const STORY_EUROPE_CITIES = [
+  { name: "Berlin", lon: 13.405, lat: 52.52 },
+  { name: "Prague", lon: 14.4378, lat: 50.0755 },
+  { name: "Vienna", lon: 16.3738, lat: 48.2082 },
+  { name: "Warsaw", lon: 21.0122, lat: 52.2297 },
+  { name: "Copenhagen", lon: 12.5683, lat: 55.6761 },
+  { name: "Amsterdam", lon: 4.9041, lat: 52.3676 },
+  { name: "Paris", lon: 2.3522, lat: 48.8566 },
+  { name: "Madrid", lon: -3.7038, lat: 40.4168 },
+  { name: "Lisbon", lon: -9.1393, lat: 38.7223 },
+  { name: "Rome", lon: 12.4964, lat: 41.9028 },
+  { name: "Milan", lon: 9.19, lat: 45.4642 },
+  { name: "Athens", lon: 23.7294, lat: 37.9838 },
+  { name: "Stockholm", lon: 18.0686, lat: 59.3293 },
+  { name: "Dublin", lon: -6.2603, lat: 53.3498 },
+  { name: "Dresden", lon: 13.745, lat: 51.057 }
+];
+const STORY_PROOF_QUANTITIES = ["roll", "score", "z", "wmax", "wspread",
+  "velocity", "coherence", "span_meta", "flags", "risk"];
 
 function storyMonthLabel(cutoff) {
   const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(cutoff || "");
@@ -367,6 +390,286 @@ function scene4Allowed(highWater, idx) {
   return idx <= highWater;
 }
 
+// Scene-7 typing: characters shown at scene-local time localT.
+function memoTypedChars(localT, total) {
+  const n = Math.floor(Number(localT) * STORY_MEMO_CPS);
+  return Math.max(0, Math.min(Number(total) || 0, n));
+}
+
+// Scene-7 highlight range: the sentence containing "prompt inspection",
+// or the first sentence of the Verdict section when that phrase is absent.
+// Returns {start, end} offsets into text, or null when neither is found.
+// Never matches inside the Owner condition section (that section is never
+// highlighted).
+function memoHighlightRange(text) {
+  const s = String(text === null || text === undefined ? "" : text);
+  if (!s) return null;
+  const ownerAt = s.indexOf("## Owner condition");
+  const inOwner = (i) => ownerAt !== -1 && i >= ownerAt;
+  const sentenceAt = (idx) => {
+    // Expand idx to the enclosing sentence: back to the previous
+    // [.?!newline] boundary, forward to the next [.?!] or newline.
+    let a = idx;
+    while (a > 0 && ".?!\n".indexOf(s[a - 1]) === -1) a--;
+    while (a < s.length && (s[a] === " " || s[a] === "\n")) a++;
+    let b = idx;
+    while (b < s.length && ".?!".indexOf(s[b]) === -1 && s[b] !== "\n") b++;
+    if (b < s.length && ".?!".indexOf(s[b]) !== -1) b++;
+    return { start: a, end: b };
+  };
+  const phrase = "prompt inspection";
+  let pi = s.indexOf(phrase);
+  while (pi !== -1 && inOwner(pi)) pi = s.indexOf(phrase, pi + 1);
+  if (pi !== -1) return sentenceAt(pi);
+  // Fallback: first sentence after the Verdict heading.
+  const vh = s.indexOf("## Verdict");
+  if (vh !== -1 && !inOwner(vh)) {
+    let p = vh + "## Verdict".length;
+    while (p < s.length && (s[p] === " " || s[p] === "\n" || s[p] === "\r")) p++;
+    if (p < s.length && !inOwner(p)) return sentenceAt(p);
+  }
+  return null;
+}
+
+// Scene-7 rendered reveal (phase 7c fix): characters shown at
+// scene-local time localT. Counts rendered text (H1 and Cutoff skipped),
+// 40 chars/s, clamped to total when given.
+function revealedCount(localT, total) {
+  const raw = Number(localT);
+  const n = Number.isFinite(raw) ? Math.floor(raw * STORY_MEMO_CPS) : 0;
+  const c = Math.max(0, n);
+  if (total === undefined || total === null) return c;
+  return Math.max(0, Math.min(Number(total) || 0, c));
+}
+
+function memoIsWs(s) {
+  return /^\s*$/.test(String(s === null || s === undefined ? "" : s));
+}
+
+function memoTextKids(node) {
+  try {
+    return node && node.childNodes ? Array.from(node.childNodes) : [];
+  } catch (e) { return []; }
+}
+
+function memoTextOf(node) {
+  try {
+    if (node.textContent !== undefined && node.textContent !== null) {
+      return String(node.textContent);
+    }
+  } catch (e) { /* fall through to data */ }
+  try { return String(node.data || ""); } catch (e) { return ""; }
+}
+
+function memoSetText(node, s) {
+  try { node.textContent = s; } catch (e) { /* ignore */ }
+  try { if (node && ("data" in node)) node.data = s; } catch (e) { /* ignore */ }
+}
+
+// Concatenated descendant text (works on real DOM and on the plain
+// {nodeType, childNodes, textContent} fakes the node tests use).
+function memoElemText(el) {
+  if (!el) return "";
+  if (el.nodeType === 3) return memoTextOf(el);
+  if (el.nodeType !== 1) return "";
+  let s = "";
+  for (const k of memoTextKids(el)) s += memoElemText(k);
+  return s;
+}
+
+function memoTag(el) {
+  try { return String(el.tagName || "").toUpperCase(); } catch (e) { return ""; }
+}
+
+function memoIsHeading(el) {
+  if (!el || el.nodeType !== 1) return false;
+  const t = memoTag(el);
+  return t === "H1" || t === "H2" || t === "H3";
+}
+
+// Total rendered characters: sum of non-whitespace text-node lengths.
+// Whitespace-only nodes (the "\n" separators renderMemo emits) never count.
+function renderedTextLength(root) {
+  let total = 0;
+  const walk = (node) => {
+    if (!node) return;
+    if (node.nodeType === 3) {
+      const full = memoTextOf(node);
+      if (memoIsWs(full)) return;
+      total += full.length;
+    } else if (node.nodeType === 1) {
+      for (const k of memoTextKids(node)) walk(k);
+    }
+  };
+  walk(root);
+  return total;
+}
+
+// Reveal the first n rendered characters in place: text nodes past the
+// budget are emptied (the boundary node truncated), and elements with no
+// visible text are hidden, so headings, paragraphs, list items and table
+// cells appear as their text is reached and a table row appears when its
+// first cell is reached. Returns the characters shown. The root itself is
+// never hidden. Callers rebuild from the cached full HTML on every sync,
+// so scrubbing backwards restores hidden text.
+function revealNodes(root, n) {
+  const budget = Math.max(0, Math.floor(Number(n) || 0));
+  let remaining = budget;
+  const walk = (node) => {
+    if (!node) return;
+    if (node.nodeType === 3) {
+      const full = memoTextOf(node);
+      if (memoIsWs(full)) return;
+      if (remaining <= 0) {
+        memoSetText(node, "");
+      } else if (full.length <= remaining) {
+        remaining -= full.length;
+      } else {
+        memoSetText(node, full.slice(0, remaining));
+        remaining = 0;
+      }
+    } else if (node.nodeType === 1) {
+      for (const k of memoTextKids(node)) walk(k);
+    }
+  };
+  walk(root);
+  const hidePass = (node, isRoot) => {
+    if (!node || node.nodeType !== 1) return false;
+    let vis = false;
+    for (const k of memoTextKids(node)) {
+      if (k.nodeType === 3) {
+        const t = memoTextOf(k);
+        if (t.length > 0 && !memoIsWs(t)) vis = true;
+      } else if (k.nodeType === 1) {
+        if (hidePass(k, false)) vis = true;
+      }
+    }
+    if (!isRoot) {
+      try { if (node.style) node.style.display = vis ? "" : "none"; } catch (e) { /* ignore */ }
+    }
+    return vis;
+  };
+  hidePass(root, true);
+  return budget - remaining;
+}
+
+// Highlight range in rendered counting (same units revealNodes uses):
+// the sentence containing "prompt inspection", or the first sentence
+// under the Verdict heading when that phrase is absent. Never matches
+// inside the Owner condition section. Returns {start, end, sentence} or
+// null. Whitespace-only nodes neither count nor match.
+function renderedHighlightRange(root) {
+  if (!root || root.nodeType !== 1) return null;
+  const top = memoTextKids(root);
+  let ownerStart = -1, ownerEnd = top.length;
+  let verdictStart = -1, verdictEnd = top.length;
+  for (let i = 0; i < top.length; i++) {
+    if (!memoIsHeading(top[i])) continue;
+    const ht = memoElemText(top[i]).trim();
+    if (ht.indexOf("Owner condition") === 0 && ownerStart === -1) {
+      ownerStart = i;
+      for (let j = i + 1; j < top.length; j++) {
+        if (memoIsHeading(top[j])) { ownerEnd = j; break; }
+      }
+    }
+    if (ht === "Verdict" && verdictStart === -1) {
+      verdictStart = i;
+      for (let j = i + 1; j < top.length; j++) {
+        if (memoIsHeading(top[j])) { verdictEnd = j; break; }
+      }
+    }
+  }
+  const segs = [];
+  let offset = 0;
+  const walk = (node, topIdx) => {
+    if (!node) return;
+    if (node.nodeType === 3) {
+      const full = memoTextOf(node);
+      if (memoIsWs(full)) return;
+      const start = offset;
+      offset += full.length;
+      segs.push({
+        text: full, start, end: offset,
+        inOwner: ownerStart !== -1 && topIdx >= ownerStart && topIdx < ownerEnd,
+        inVerdict: verdictStart !== -1 && topIdx > verdictStart && topIdx < verdictEnd
+      });
+    } else if (node.nodeType === 1) {
+      const kids = memoTextKids(node);
+      if (node === root) {
+        for (let i = 0; i < kids.length; i++) walk(kids[i], i);
+      } else {
+        for (const k of kids) walk(k, topIdx);
+      }
+    }
+  };
+  walk(root, -1);
+  const sentenceAt = (text, idx) => {
+    let a = idx;
+    while (a > 0 && ".?!\n".indexOf(text[a - 1]) === -1) a--;
+    while (a < text.length && (text[a] === " " || text[a] === "\n")) a++;
+    let b = idx;
+    while (b < text.length && ".?!".indexOf(text[b]) === -1 && text[b] !== "\n") b++;
+    if (b < text.length && ".?!".indexOf(text[b]) !== -1) b++;
+    return { start: a, end: b };
+  };
+  const phrase = "prompt inspection";
+  for (const s of segs) {
+    if (s.inOwner) continue;
+    const pi = s.text.indexOf(phrase);
+    if (pi !== -1) {
+      const local = sentenceAt(s.text, pi);
+      return {
+        start: s.start + local.start,
+        end: s.start + local.end,
+        sentence: s.text.slice(local.start, local.end)
+      };
+    }
+  }
+  for (const s of segs) {
+    if (!s.inVerdict || s.inOwner) continue;
+    let p = 0;
+    while (p < s.text.length && (s.text[p] === " " || s.text[p] === "\n" || s.text[p] === "\r")) p++;
+    if (p >= s.text.length) continue;
+    const local = sentenceAt(s.text, p);
+    return {
+      start: s.start + local.start,
+      end: s.start + local.end,
+      sentence: s.text.slice(local.start, local.end)
+    };
+  }
+  return null;
+}
+
+// Scene-8 count-in: value at localT counting 0 -> target over
+// STORY_PROOF_COUNT seconds. Reduced motion shows the final state.
+function proofCountValue(target, localT, reduced) {
+  const v = Number(target);
+  if (reduced) return Number.isNaN(v) ? 0 : v;
+  const frac = Math.max(0, Math.min(1, Number(localT) / STORY_PROOF_COUNT));
+  return (Number.isNaN(v) ? 0 : v) * frac;
+}
+
+// Scene-8 checks: how many quantity rows show a check at localT (the
+// count-in first, then one check every STORY_PROOF_GAP).
+function proofChecksShown(localT, total, reduced) {
+  const n = Number(total) || 0;
+  if (reduced) return n;
+  const t = Number(localT);
+  if (t < STORY_PROOF_COUNT) return 0;
+  return Math.max(0, Math.min(n, Math.floor((t - STORY_PROOF_COUNT) / STORY_PROOF_GAP) + 1));
+}
+
+// Scene-9 Europe dots: how many cities are lit at localT (one by one from
+// STORY_EUROPE_AT to the scene end; all at once under reduced motion).
+function europeLitCount(localT, total, duration, reduced) {
+  const n = Number(total) || 0;
+  const t = Number(localT);
+  if (t < STORY_EUROPE_AT) return 0;
+  if (reduced) return n;
+  const span = Math.max(0.001, Number(duration) - STORY_EUROPE_AT);
+  return Math.max(0, Math.min(n, Math.floor((t - STORY_EUROPE_AT) / span * n) + 1));
+}
+
 // Caption data for the bound cutoff. ctx: {cutoffIdx, cutoffs, decisions,
 // id2name, counts:{n_bridges,n_monitored,n_not_monitored}, eventDate,
 // eventAsset}. Only the bound cutoff's table is read, plus the authored
@@ -421,6 +724,18 @@ let storyScene3Order = [];
 let storyScene3Lit = -1;
 let storyS4Callouts = [];
 let storyGlowPulsed = "";
+let storyExplainerOn = false;
+let storyMemoText = "";
+let storyMemoCutoff = "";
+let storyMemoRange = null;
+let storyMemoHtml = "";
+let storyMemoTotal = 0;
+let storyMemoHl = null;
+let storyS2On = false;
+let storySamOn = false;
+let storyProof = null;
+let storyEuropeN = -1;
+let storyEuropeCam = false;
 
 function storyHasGsap() {
   return (typeof gsap !== "undefined") && gsap !== null;
@@ -684,6 +999,502 @@ function storyHideSideView() {
   storyShow(storyEl("sceneSideView"), false);
 }
 
+function storyEsc(s) {
+  try {
+    if (typeof esc === "function") return esc(String(s));
+  } catch (e) { /* fall through */ }
+  return String(s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// ---------- Phase 7c: scene 2 explainer ----------
+
+function storyShowExplainer() {
+  const cover = storyEl("sceneCover");
+  if (!cover) return;
+  try {
+    if (typeof ExplainerShow === "function") {
+      ExplainerShow(cover);
+      storyExplainerOn = true;
+    }
+  } catch (e) { storyExplainerOn = false; }
+}
+
+function storyHideExplainer() {
+  if (!storyExplainerOn) return;
+  storyExplainerOn = false;
+  try {
+    const cover = storyEl("sceneCover");
+    if (cover && typeof ExplainerDestroy === "function") ExplainerDestroy(cover);
+  } catch (e) { /* ignore */ }
+}
+
+function storySyncExplainer(localT) {
+  if (!storyExplainerOn) return;
+  try {
+    const cover = storyEl("sceneCover");
+    if (cover && typeof ExplainerSync === "function") ExplainerSync(cover, localT);
+  } catch (e) { /* ignore */ }
+}
+
+// ---------- Phase 7c: scene 7 memo + S2 chip + SAM ----------
+
+function storyShowMemoPanel(cutoff) {
+  const panel = storyEl("sceneMemo");
+  const body = storyEl("sceneMemoBody");
+  const title = storyEl("sceneMemoTitle");
+  if (!panel || !body) return;
+  if (title) title.textContent = `Inspection memo — ${cutoff}`;
+  body.textContent = "Loading the memo…";
+  storyShow(panel, true);
+}
+
+function storyHideMemoPanel() {
+  storyShow(storyEl("sceneMemo"), false);
+}
+
+// Rendered memo for the typing panel: renderMemo output minus the H1
+// (the panel heading already says "Inspection memo — <cutoff>") and the
+// "Cutoff …" line, with the rendered length and highlight precomputed.
+// Returns {html, total, hl} or null when renderMemo/DOM is unavailable.
+function storyBuildRenderedMemo(md) {
+  try {
+    if (typeof renderMemo !== "function") return null;
+    if (typeof document === "undefined" || !document.createElement) return null;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = renderMemo(md);
+    try {
+      const h1 = tmp.querySelector("h1");
+      if (h1 && h1.remove) h1.remove();
+    } catch (e) { /* keep going */ }
+    try {
+      const ps = tmp.querySelectorAll("p");
+      for (const p of Array.from(ps || [])) {
+        const t = String((p.textContent || "").trim());
+        if (t.indexOf("Cutoff ") === 0) {
+          if (p.remove) p.remove();
+          break;
+        }
+      }
+    } catch (e) { /* keep going */ }
+    try {
+      while (tmp.firstChild && tmp.firstChild.nodeType === 3 &&
+          /^\s*$/.test(String(tmp.firstChild.textContent || ""))) {
+        tmp.removeChild(tmp.firstChild);
+      }
+    } catch (e) { /* keep going */ }
+    const total = renderedTextLength(tmp);
+    let hl = null;
+    try { hl = renderedHighlightRange(tmp); } catch (e) { hl = null; }
+    return { html: tmp.innerHTML, total, hl };
+  } catch (e) { return null; }
+}
+
+// Wrap the precomputed highlight sentence in <mark>. The target block is
+// text-only in the shipped memos (no bold/italic), so rebuilding its
+// innerHTML from its truncated textContent keeps the panel well-formed.
+// Skips the Owner condition section and elements with nested markup.
+function storyHighlightRendered(body, hl) {
+  if (!body || !hl || !hl.sentence) return;
+  const sent = hl.sentence;
+  let kids = [];
+  try { kids = body.childNodes ? Array.from(body.childNodes) : []; } catch (e) { kids = []; }
+  let ownerStart = -1, ownerEnd = kids.length;
+  const isH = (el) => !!el && el.nodeType === 1 && /^(H1|H2|H3)$/i.test(String(el.tagName || ""));
+  for (let i = 0; i < kids.length; i++) {
+    if (!isH(kids[i])) continue;
+    let ht = "";
+    try { ht = String(kids[i].textContent || "").trim(); } catch (e) { ht = ""; }
+    if (ht.indexOf("Owner condition") === 0) {
+      ownerStart = i;
+      for (let j = i + 1; j < kids.length; j++) {
+        if (isH(kids[j])) { ownerEnd = j; break; }
+      }
+      break;
+    }
+  }
+  const inOwner = (el) => {
+    try {
+      let cur = el;
+      while (cur && cur.parentNode && cur.parentNode !== body) cur = cur.parentNode;
+      if (!cur || cur.parentNode !== body) return false;
+      const idx = kids.indexOf(cur);
+      return ownerStart !== -1 && idx >= ownerStart && idx < ownerEnd;
+    } catch (e) { return false; }
+  };
+  let cands = [];
+  try { cands = body.querySelectorAll ? Array.from(body.querySelectorAll("p, li, td, th")) : []; }
+  catch (e) { cands = []; }
+  for (const el of cands) {
+    if (inOwner(el)) continue;
+    let hasElem = false;
+    try {
+      for (const cn of Array.from(el.childNodes || [])) {
+        if (cn.nodeType === 1) { hasElem = true; break; }
+      }
+    } catch (e) { hasElem = true; }
+    if (hasElem) continue;
+    let txt = "";
+    try { txt = String(el.textContent || ""); } catch (e) { continue; }
+    const idx = txt.indexOf(sent);
+    if (idx === -1) continue;
+    el.innerHTML = storyEsc(txt.slice(0, idx)) + "<mark>" +
+      storyEsc(sent) + "</mark>" + storyEsc(txt.slice(idx + sent.length));
+    return;
+  }
+}
+
+function storyFetchMemo(cutoff, token) {
+  if (storyMemoCutoff === cutoff && (storyMemoHtml || storyMemoText)) return;
+  fetch(`data/memos/${cutoff}.md`).then(
+    (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.text();
+    }).then(
+    (md) => {
+      if (token !== storyEnterToken) return;
+      storyMemoText = md;
+      storyMemoCutoff = cutoff;
+      try { storyMemoRange = memoHighlightRange(md); } catch (e) { storyMemoRange = null; }
+      const built = storyBuildRenderedMemo(md);
+      if (built) {
+        storyMemoHtml = built.html;
+        storyMemoTotal = built.total;
+        storyMemoHl = built.hl;
+      } else {
+        storyMemoHtml = "";
+        storyMemoTotal = 0;
+        storyMemoHl = null;
+      }
+      // Re-sync the current playhead so the typing appears immediately.
+      try {
+        if (storyMaster && storyScenes[storyScene] && storyScenes[storyScene].id === "the-report") {
+          const t = storyMaster.time();
+          storySyncMemo(t - storyBounds[storyScene].start);
+        }
+      } catch (e) { /* ignore */ }
+    },
+    () => {
+      if (token !== storyEnterToken) return;
+      storyMemoText = "";
+      storyMemoCutoff = cutoff;
+      storyMemoRange = null;
+      storyMemoHtml = "";
+      storyMemoTotal = 0;
+      storyMemoHl = null;
+      try {
+        const body = storyEl("sceneMemoBody");
+        if (body) body.textContent = `Could not load the memo for ${cutoff}.`;
+      } catch (e) { /* ignore */ }
+    });
+}
+
+// Typing as a function of the playhead: the rendered memo (H1 and Cutoff
+// skipped) reveals 40 chars/s, instant under reduced motion. The sentence
+// containing "prompt inspection" highlights once fully typed (fallback:
+// first Verdict sentence; Owner never highlighted).
+function storySyncMemo(localT) {
+  const body = storyEl("sceneMemoBody");
+  if (!body) return;
+  if (storyMemoHtml) {
+    const total = storyMemoTotal;
+    const n = storyReduced() ? total : revealedCount(localT, total);
+    body.innerHTML = storyMemoHtml;
+    try { revealNodes(body, n); } catch (e) { /* show the full panel */ }
+    const hl = storyMemoHl;
+    if (hl && n >= hl.end) {
+      try { storyHighlightRendered(body, hl); } catch (e) { /* reveal without highlight */ }
+    }
+    try {
+      const mark = body.querySelector("mark");
+      if (mark) {
+        const panel = storyEl("sceneMemo");
+        if (panel) {
+          const pr = panel.getBoundingClientRect();
+          const mr = mark.getBoundingClientRect();
+          if (mr.bottom > pr.bottom || mr.top < pr.top) {
+            panel.scrollTop += mr.top - pr.top - 40;
+          }
+        }
+      }
+    } catch (e) { /* highlight without scrolling */ }
+    return;
+  }
+  if (!storyMemoText) return; // fetch in flight; "Loading…" stays
+  // Fallback when renderMemo is unavailable: raw typing (never in practice).
+  const total = storyMemoText.length;
+  const n = storyReduced() ? total : memoTypedChars(localT, total);
+  const typed = storyMemoText.slice(0, n);
+  const range = storyMemoRange;
+  if (!range || n < range.end) {
+    body.textContent = typed;
+    return;
+  }
+  const a = Math.max(0, Math.min(range.start, n));
+  const b = Math.max(a, Math.min(range.end, n));
+  body.innerHTML = storyEsc(typed.slice(0, a)) + "<mark>" +
+    storyEsc(typed.slice(a, b)) + "</mark>" + storyEsc(typed.slice(b));
+}
+
+function storyAddS2(token) {
+  try {
+    if (typeof map === "undefined" || !map) return;
+    if (storyS2On && map.getSource && map.getSource("s2")) return;
+  } catch (e) { return; }
+  fetch("data/s2_visual.json").then(
+    (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }).then(
+    (js) => {
+      if (token !== storyEnterToken) return;
+      try {
+        if (typeof map === "undefined" || !map) return;
+        if (map.getSource && map.getSource("s2")) {
+          storyS2On = true;
+          return;
+        }
+        map.addSource("s2", { type: "image", url: "data/s2_visual.png",
+          coordinates: js.coordinates });
+        const before = (map.getLayer && map.getLayer("bridges-fill"))
+          ? "bridges-fill" : undefined;
+        if (before) map.addLayer({ id: "s2-raster", type: "raster",
+          source: "s2", paint: { "raster-opacity": 0.9 } }, before);
+        else map.addLayer({ id: "s2-raster", type: "raster",
+          source: "s2", paint: { "raster-opacity": 0.9 } });
+        storyS2On = true;
+      } catch (e) { /* chip is decoration, never fatal */ }
+    },
+    () => { /* chip stays hidden when its corners fail to load */ });
+}
+
+function storyRemoveS2() {
+  storyS2On = false;
+  try {
+    if (typeof map === "undefined" || !map) return;
+    if (map.getLayer && map.getLayer("s2-raster")) map.removeLayer("s2-raster");
+    if (map.getSource && map.getSource("s2")) map.removeSource("s2");
+  } catch (e) { /* ignore */ }
+}
+
+function storyAddSam(token) {
+  try {
+    if (typeof AnnotateSetSamOutline !== "function") return;
+  } catch (e) { return; }
+  fetch("data/sam.geojson").then(
+    (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }).then(
+    (gj) => {
+      if (token !== storyEnterToken) return;
+      try {
+        const feats = (gj && gj.features) || [];
+        const carola = feats.find((f) =>
+          f && f.properties && f.properties.bridge === "Carolabrücke");
+        if (!carola) return;
+        const geom = carola.geometry || {};
+        let ring = null;
+        if (geom.type === "Polygon" && geom.coordinates && geom.coordinates[0]) {
+          ring = geom.coordinates[0];
+        } else if (geom.type === "MultiPolygon" && geom.coordinates && geom.coordinates[0]) {
+          ring = geom.coordinates[0][0];
+        }
+        if (!ring) return;
+        let label = "SAM 3.1";
+        try {
+          if (typeof formatSamLabel === "function") {
+            label = formatSamLabel(carola.properties.score, carola.properties.iou);
+          } else {
+            label = `SAM 3.1 · score ${carola.properties.score} · IoU ${carola.properties.iou}`;
+          }
+        } catch (e) { /* keep fallback */ }
+        AnnotateSetSamOutline(ring, label);
+        storySamOn = true;
+      } catch (e) { /* outline is decoration, never fatal */ }
+    },
+    () => { /* outline stays hidden when sam.geojson fails to load */ });
+}
+
+function storyRemoveSam() {
+  storySamOn = false;
+  try {
+    if (typeof AnnotateClearSam === "function") AnnotateClearSam();
+  } catch (e) { /* ignore */ }
+}
+
+// ---------- Phase 7c: scene 8 proof ----------
+
+function storyShowProof() {
+  const panel = storyEl("sceneProof");
+  const list = storyEl("proofList");
+  const foot = storyEl("proofFoot");
+  if (!panel) return;
+  if (list && !list.childNodes.length) {
+    for (const q of STORY_PROOF_QUANTITIES) {
+      const li = document.createElement("li");
+      const tick = document.createElement("span");
+      tick.className = "proof-check";
+      const name = document.createElement("span");
+      name.textContent = q;
+      li.appendChild(tick);
+      li.appendChild(name);
+      list.appendChild(li);
+    }
+  }
+  if (foot && storyProof && storyProof.agreement) {
+    const ag = storyProof.agreement;
+    const n = (ag.agree !== undefined) ? ag.agree : ag.n;
+    const m = (ag.total !== undefined) ? ag.total : ag.m;
+    foot.textContent = `Same high bridges in ${n} of ${m} months`;
+  } else if (foot) {
+    foot.textContent = "";
+  }
+  storyShow(panel, true);
+}
+
+function storyHideProof() {
+  storyShow(storyEl("sceneProof"), false);
+}
+
+function storyFetchProof(token) {
+  if (storyProof) {
+    try { storyShowProof(); } catch (e) { /* ignore */ }
+    return;
+  }
+  fetch("data/proof.json").then(
+    (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }).then(
+    (js) => {
+      if (token !== storyEnterToken) return;
+      storyProof = js;
+      try { storyShowProof(); } catch (e) { /* ignore */ }
+      try {
+        if (storyMaster && storyScenes[storyScene] && storyScenes[storyScene].id === "the-proof") {
+          const t = storyMaster.time();
+          storySyncProof(t - storyBounds[storyScene].start);
+        }
+      } catch (e) { /* ignore */ }
+    },
+    () => {
+      if (token !== storyEnterToken) return;
+      try {
+        const foot = storyEl("proofFoot");
+        if (foot) foot.textContent = "Could not load the proof numbers.";
+      } catch (e) { /* ignore */ }
+    });
+}
+
+// Count-in + checks as a function of the playhead; final state at once
+// under reduced motion.
+function storySyncProof(localT) {
+  if (!storyProof) return;
+  const reduced = storyReduced();
+  const carola = storyProof.carola || {};
+  const set = (id, v) => {
+    const el = storyEl(id);
+    if (el) el.textContent = (Number(v) || 0).toFixed(2);
+  };
+  set("proofScoreFull", proofCountValue(carola.score_full, localT, reduced));
+  set("proofScoreTrunc", proofCountValue(carola.score_trunc, localT, reduced));
+  set("proofZFull", proofCountValue(carola.z_full, localT, reduced));
+  set("proofZTrunc", proofCountValue(carola.z_trunc, localT, reduced));
+  const list = storyEl("proofList");
+  if (list) {
+    const n = proofChecksShown(localT, STORY_PROOF_QUANTITIES.length, reduced);
+    const kids = list.querySelectorAll(".proof-check");
+    for (let i = 0; i < kids.length; i++) {
+      kids[i].textContent = (i < n) ? "✓" : "";
+    }
+  }
+}
+
+// ---------- Phase 7c: scene 9 Europe outro ----------
+
+function storyEnsureEuropeLayer() {
+  try {
+    if (typeof map === "undefined" || !map) return false;
+    if (map.getSource && map.getSource("europe")) return true;
+    map.addSource("europe", { type: "geojson",
+      data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "europe-dots", type: "circle", source: "europe",
+      paint: { "circle-color": "#ffffff", "circle-radius": 5,
+        "circle-opacity": 0.95, "circle-stroke-color": "#1d4ed8",
+        "circle-stroke-width": 1.5 } });
+    return true;
+  } catch (e) { return false; }
+}
+
+function storyRemoveEurope() {
+  storyEuropeN = -1;
+  storyEuropeCam = false;
+  storyShow(storyEl("sceneEuropeNote"), false);
+  try {
+    if (typeof AnnotateClear === "function") AnnotateClear("eu-");
+  } catch (e) { /* ignore */ }
+  try {
+    if (typeof map === "undefined" || !map) return;
+    if (map.getLayer && map.getLayer("europe-dots")) map.removeLayer("europe-dots");
+    if (map.getSource && map.getSource("europe")) map.removeSource("europe");
+  } catch (e) { /* ignore */ }
+}
+
+// Europe camera + dots as a function of the playhead: Dresden until
+// STORY_EUROPE_AT, then zoom 3.8 on 12E 52N with the cities lighting one
+// by one, Dresden last and labelled.
+function storySyncEurope(localT, duration) {
+  const wantEurope = Number(localT) >= STORY_EUROPE_AT;
+  if (wantEurope !== storyEuropeCam) {
+    storyEuropeCam = wantEurope;
+    try {
+      if (typeof map !== "undefined" && map) {
+        if (wantEurope) {
+          if (storyScrubbing || storyReduced()) {
+            map.jumpTo({ center: STORY_EUROPE_CENTER.slice(),
+              zoom: STORY_EUROPE_ZOOM, pitch: 0, bearing: 0 });
+          } else {
+            map.easeTo({ center: STORY_EUROPE_CENTER.slice(),
+              zoom: STORY_EUROPE_ZOOM, pitch: 0, bearing: 0,
+              duration: 2000 });
+          }
+        } else {
+          map.jumpTo({ center: [13.745, 51.057], zoom: 12, pitch: 40,
+            bearing: 0 });
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+  storyShow(storyEl("sceneEuropeNote"), wantEurope);
+  const n = europeLitCount(localT, STORY_EUROPE_CITIES.length, duration,
+    storyReduced());
+  if (n === storyEuropeN) return;
+  storyEuropeN = n;
+  try {
+    if (typeof map !== "undefined" && map && storyEnsureEuropeLayer()) {
+      const feats = STORY_EUROPE_CITIES.slice(0, n).map((c, i) => ({
+        type: "Feature",
+        properties: { id: `eu-${i}`, name: c.name },
+        geometry: { type: "Point", coordinates: [c.lon, c.lat] }
+      }));
+      map.getSource("europe").setData({ type: "FeatureCollection",
+        features: feats });
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    if (typeof AnnotateSetCallouts === "function") {
+      if (n >= STORY_EUROPE_CITIES.length) {
+        const d = STORY_EUROPE_CITIES[STORY_EUROPE_CITIES.length - 1];
+        AnnotateSetCallouts([{ id: "eu-dresden", lon: d.lon, lat: d.lat,
+          title: "Dresden" }]);
+      } else {
+        AnnotateClear("eu-");
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
 // Scene-6 glow pulse: one 1.2 s radius/opacity tween on the glow layer,
 // then static. Only Carolabrücke glows at the last cutoff (the only high
 // bridge), so the layer-wide tween reads as one marker pulsing. Static
@@ -745,6 +1556,20 @@ function storyApplyOverlays(i) {
   storyShow(storyEl("sceneTitle"), sc.overlay === "title" && storyHasStarted());
   storyShow(storyEl("sceneCover"), !!(sc.layers && sc.layers.cover));
   storyShow(storyEl("sceneDim"), !!(sc.layers && sc.layers.dim));
+  // 7c overlays: explainer owns the cover, the memo panel the side area,
+  // the proof panel the dimmed map. Anything not for this scene is removed
+  // so scrubs always land on correct state.
+  if (sc.id === "how-radar-sees") storyShowExplainer();
+  else storyHideExplainer();
+  if (sc.id === "the-report") storyShowMemoPanel(sc.cutoff);
+  else {
+    storyHideMemoPanel();
+    storyRemoveS2();
+    storyRemoveSam();
+  }
+  if (sc.id === "the-proof") storyShowProof();
+  else storyHideProof();
+  if (sc.id !== "ten-days-later") storyRemoveEurope();
   storyShow(storyEl("historyStrip"), sc.id === "three-years");
   if (sc.id === "august" || sc.id === "september") {
     try {
@@ -832,6 +1657,16 @@ function storyApplySceneState(i) {
         }
       }
     } catch (e) { /* ignore */ }
+  }
+  // Scene 7: memo typing + S2 chip + SAM outline (token-guarded fetches).
+  if (sc.id === "the-report") {
+    try { storyFetchMemo(sc.cutoff, my); } catch (e) { /* ignore */ }
+    try { storyAddS2(my); } catch (e) { /* ignore */ }
+    try { storyAddSam(my); } catch (e) { /* ignore */ }
+  }
+  // Scene 8: proof numbers (token-guarded fetch).
+  if (sc.id === "the-proof") {
+    try { storyFetchProof(my); } catch (e) { /* ignore */ }
   }
   // Scene 6: glow pulse once, then the rank/z counter from August.
   if (sc.id === "september") {
@@ -1121,6 +1956,9 @@ function storySyncProgress(i, localT) {
   const sc = storyScenes[i];
   if (!sc) return;
   storySyncCamera(i, localT);
+  if (sc.id === "how-radar-sees") {
+    storySyncExplainer(localT);
+  }
   if (sc.id === "twenty-bridges") {
     storySyncScene3(localT);
   }
@@ -1128,10 +1966,17 @@ function storySyncProgress(i, localT) {
     const m = storyMonthAtLocalTime(localT);
     if (m !== storyMonth) storyStepMonth(m, storyScrubbing);
   }
+  if (sc.id === "the-report") {
+    storySyncMemo(localT);
+  }
+  if (sc.id === "the-proof") {
+    storySyncProof(localT);
+  }
   if (sc.id === "ten-days-later") {
     storySyncDateRoll(localT);
     storyShow(storyEl("dateRoll"), localT < STORY_END_AT);
     storySyncEnding(localT >= STORY_END_AT);
+    storySyncEurope(localT, sc.duration);
   }
 }
 
@@ -1170,6 +2015,12 @@ function storyBuildMaster() {
   storyScene3Order = [];
   storyScene3Lit = -1;
   storyClearCallouts();
+  storyHideExplainer();
+  storyHideMemoPanel();
+  storyHideProof();
+  storyRemoveS2();
+  storyRemoveSam();
+  storyRemoveEurope();
   storyHideCaption();
   storyMaster = gsap.timeline({ paused: true,
     onUpdate: storyOnMasterUpdate, onComplete: storyOnComplete });
@@ -1400,6 +2251,12 @@ function storyHideOverlays() {
   storyShow(storyEl("dateRoll"), false);
   storyShow(storyEl("storyEnd"), false);
   storyShow(storyEl("hoverLabel"), false);
+  storyHideExplainer();
+  storyHideMemoPanel();
+  storyHideProof();
+  storyRemoveS2();
+  storyRemoveSam();
+  storyRemoveEurope();
   storyHideSideView();
   // The history strip belongs to Explore (always full) and to scene 4.
   // Hide here; the Explore path re-renders it full via applyCutoff.
@@ -1645,9 +2502,15 @@ if (typeof module !== "undefined" && module.exports) {
     firstLevelHits, buildScenes, sceneBounds,
     totalDuration, sceneIndexAtTime, scene4Allowed, captionDataFor,
     captionIndexAtLocalTime, captionAtTime, storyOrbitBearing,
+    memoTypedChars, memoHighlightRange, revealedCount, renderedTextLength,
+    revealNodes, renderedHighlightRange, proofCountValue, proofChecksShown,
+    europeLitCount,
     STORY_SCENE_NAMES, STORY_PLACEHOLDERS,
     STORY_MONTH_STEP, STORY_SCENE4_LEAD, STORY_SCENE4_TAIL,
     STORY_WAIT_TIMEOUT, STORY_CALLOUT_HOLD, STORY_DATE_ROLL, STORY_END_AT,
-    STORY_SCENE3_FLY, STORY_SCENE3_GAP, STORY_SCENE6_ORBIT, STORY_GLOW_PULSE
+    STORY_SCENE3_FLY, STORY_SCENE3_GAP, STORY_SCENE6_ORBIT, STORY_GLOW_PULSE,
+    STORY_MEMO_CPS, STORY_PROOF_COUNT, STORY_PROOF_GAP, STORY_EUROPE_AT,
+    STORY_EUROPE_ZOOM, STORY_EUROPE_CENTER, STORY_EUROPE_CITIES,
+    STORY_PROOF_QUANTITIES
   };
 }

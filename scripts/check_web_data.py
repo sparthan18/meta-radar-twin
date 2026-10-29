@@ -519,6 +519,76 @@ def run_checks(data_dir: Path, out_dir: Path) -> list[str]:
             errors.append(f"decisions.json: n_monitored ({n_monitored}) != "
                           f"monitored features in bridges.geojson "
                           f"({geo_total - geo_not})")
+
+    # 14. proof.json (phase 7c, story scene 8): every quantity passes with
+    # difference 0, and the two Carolabrücke scores are equal.
+    proof_path = data_dir / "proof.json"
+    if not proof_path.exists():
+        errors.append("missing file: proof.json")
+    else:
+        try:
+            proof = _load_json(proof_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"invalid JSON in proof.json: {exc}")
+            proof = None
+        if proof is not None:
+            want_q = {"roll", "score", "z", "wmax", "wspread", "velocity",
+                      "coherence", "span_meta", "flags", "risk"}
+            got_q = proof.get("quantities", {})
+            if set(got_q) != want_q:
+                errors.append(f"proof.json: quantities {sorted(got_q)} != "
+                              f"expected {sorted(want_q)}")
+            for key in sorted(want_q):
+                q = got_q.get(key)
+                if not isinstance(q, dict):
+                    errors.append(f"proof.json: quantity {key!r} missing")
+                    continue
+                if q.get("pass") is not True:
+                    errors.append(f"proof.json: quantity {key!r} did not pass")
+                try:
+                    diff = float(q.get("max_abs_diff"))
+                except (TypeError, ValueError):
+                    errors.append(f"proof.json: quantity {key!r} has no "
+                                  f"numeric max_abs_diff")
+                    continue
+                if diff != 0.0:
+                    errors.append(f"proof.json: quantity {key!r} max_abs_diff "
+                                  f"{diff!r} != 0")
+            carola = proof.get("carola", {})
+            sf, st = carola.get("score_full"), carola.get("score_trunc")
+            try:
+                if float(sf) != float(st):
+                    errors.append(f"proof.json: Carolabrücke scores differ "
+                                  f"({sf!r} vs {st!r})")
+            except (TypeError, ValueError):
+                errors.append("proof.json: Carolabrücke scores missing or "
+                              "not numeric")
+
+    # 15. the s2 corners lie inside the Dresden bounding box (phase 7c).
+    s2_path = data_dir / "s2_visual.json"
+    if not s2_path.exists():
+        errors.append("missing file: s2_visual.json")
+    else:
+        try:
+            s2 = _load_json(s2_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"invalid JSON in s2_visual.json: {exc}")
+            s2 = None
+        if s2 is not None:
+            minlon, minlat, maxlon, maxlat = DRESDEN_BBOX
+            coords = s2.get("coordinates", [])
+            if len(coords) != 4:
+                errors.append(f"s2_visual.json: expected 4 corners, "
+                              f"got {len(coords)}")
+            for corner in coords:
+                try:
+                    lon, lat = float(corner[0]), float(corner[1])
+                except (TypeError, ValueError, IndexError):
+                    errors.append(f"s2_visual.json: bad corner {corner!r}")
+                    continue
+                if not (minlon <= lon <= maxlon and minlat <= lat <= maxlat):
+                    errors.append(f"s2_visual.json corner {corner!r} "
+                                  f"outside the Dresden bbox")
     return errors
 
 
@@ -619,6 +689,25 @@ def self_test() -> int:
             dec["n_monitored"] = int(dec["n_monitored"]) + 1
             dec_path.write_text(json.dumps(dec))
             return
+        if kind == "proof-diff-nonzero":
+            proof_path = data_dir / "proof.json"
+            proof = json.loads(proof_path.read_text())
+            proof["quantities"]["score"]["max_abs_diff"] = 0.5
+            proof_path.write_text(json.dumps(proof))
+            return
+        if kind == "proof-carola-mismatch":
+            proof_path = data_dir / "proof.json"
+            proof = json.loads(proof_path.read_text())
+            proof["carola"]["score_trunc"] = float(
+                proof["carola"]["score_full"]) + 1.0
+            proof_path.write_text(json.dumps(proof))
+            return
+        if kind == "s2-corner-outside":
+            s2_path = data_dir / "s2_visual.json"
+            s2 = json.loads(s2_path.read_text())
+            s2["coordinates"][0] = [0.0, 0.0]
+            s2_path.write_text(json.dumps(s2))
+            return
         dec_path = data_dir / "decisions.json"
         dec = json.loads(dec_path.read_text())
         cutoffs = dec["cutoffs"]
@@ -666,7 +755,9 @@ def self_test() -> int:
              "scatterer-array-len", "s1-corner-outside",
              "whole-period-newfile",
              "memo-listed-without-file", "memo-file-unlisted",
-             "memo-after-last", "counts-mismatch"]
+             "memo-after-last", "counts-mismatch",
+             "proof-diff-nonzero", "proof-carola-mismatch",
+             "s2-corner-outside"]
     failed = False
     for kind in kinds:
         tmp_data = _copy_data(data_src)

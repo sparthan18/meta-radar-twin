@@ -361,10 +361,16 @@ def main() -> int:
     # (scripts/render_s1_chip.py wrote them into out/).
     shutil.copyfile(OUT / "s1_amplitude.png", WEB_DATA / "s1_amplitude.png")
     shutil.copyfile(OUT / "s1_amplitude.json", WEB_DATA / "s1_amplitude.json")
+    # --- proof.json (phase 7c): truncation proof from check_truncation --json.
+    shutil.copyfile(OUT / "proof.json", WEB_DATA / "proof.json")
+    # --- s2_visual.png + .json (phase 7c): Sentinel-2 chip SAM saw.
+    shutil.copyfile(OUT / "s2_visual.png", WEB_DATA / "s2_visual.png")
+    shutil.copyfile(OUT / "s2_visual.json", WEB_DATA / "s2_visual.json")
 
     files = ["bridges.geojson", "spans.json", "decisions.json",
              "scatterers.geojson", "scatterer_velocity.json", "sam.geojson",
-             "s1_amplitude.png", "s1_amplitude.json"]
+             "s1_amplitude.png", "s1_amplitude.json", "proof.json",
+             "s2_visual.png", "s2_visual.json"]
     total = 0
     for name in files:
         size = (WEB_DATA / name).stat().st_size

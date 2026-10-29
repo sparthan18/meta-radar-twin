@@ -1,0 +1,11 @@
+Phase 7c fix: one defect seen when scene 7 was played in a real browser. Change only web/story.js, web/story.css and tests/test_story.js. Do not touch web/data/, scripts/ or out/.
+
+Measured: `#sceneMemoBody` types the memo's raw markdown. At 4.5 s into scene 7 it read "# RadarTwin audit memo — 2024-09-01 Cutoff 2024-09-01 ## Verdict <mark>Carolabrücke is the only bridge that needs prompt inspection at this cutoff.</mark> Radar shows…". The viewer sees "#" and "##" characters and a title that repeats the panel's own heading. The highlight works and must stay.
+
+Fix: type the rendered memo, not the source. Render the markdown with `renderMemo` (web/memo.js), skip the H1 (the panel heading already says "Inspection memo — <cutoff>") and the "Cutoff …" line, then reveal the rendered content progressively: walk the rendered text nodes in document order and expose the first N characters at 40 characters per second (headings, paragraphs, list items and table cells appear as their text is reached; a table row appears when its first cell is reached), so what is on screen is always well-formed HTML with no markdown markers. The highlight wraps the rendered sentence containing "prompt inspection" (fallback: the first sentence under Verdict) once it is fully typed; the Owner condition section is never highlighted. Instant under reduced motion. Keep the panel removal on scene exit and scrub.
+
+Make the reveal a pure function: `revealedCount(t)` and `revealNodes(root, n)` (or equivalent) and test them in tests/test_story.js on a small rendered fixture, with a planted failure where a marker character would leak. Report the character count at which the highlighted sentence completes.
+
+Prove what you can from the code and the tests; you have no browser. The reviewer will read `#sceneMemoBody` at 4.5 s into scene 7 and check that it contains no "#" markers, that the first visible line is the Verdict heading, and that the highlighted sentence is intact.
+
+Standing rules: do not use jg/jevgrep or any tool that sends code to an external service; no spend, no network, no installs, no commits, no background jobs, no `&`. Do not change wording, data or thresholds. Call the build steps "phases". Finish with the diff, the test results and a sentence on how you verified it.
