@@ -449,7 +449,7 @@ bridge-ness. See docs/gotchas.md.
   `decisions.json` (`{site, event_date, event_asset, n_bridges, cutoffs:[...], decisions:{cutoff:{id:
   {rank, score, wmax, wspread, z, vel, flags, escalations_12m, months_since_esc, radar_coverage,
   model:{pattern, risk, inspect, p_risk, p_high, p_inspect}, rubric:{pattern, risk, inspect},
-  owner_condition_alert}}}, owner:{asset:{condition, source}}}`),
+  owner_condition_alert}}}, owner:{asset:{condition, source}}, memo_cutoffs:[...]}`),
   `scatterers.geojson` (points with id and track only), `scatterer_velocity.json` (per point, the
   cutoff velocity at each of the 33 cutoffs from `out/scatterer_velocity.csv`, null below 24
   epochs), `sam.geojson` (SAM box-prompt polygons with IoU and bright fraction),
@@ -495,8 +495,10 @@ never a whole-period value; SAM polygons with IoU; Sentinel-1 amplitude chip tog
 around Carolabrücke, rendered from `data/` into `out/` by a script, since the exporter reads `out/`
 only).
 
-**Phase 5d (memo, polish):** memo panel for cutoffs with a memo ("no memo for this month"
-otherwise), phone layout, accessibility pass. Deployment only after the owner approves the host; a live "Run audit" button
+**Phase 5d (memo, polish):** memo panel for cutoffs listed in `memo_cutoffs` ("no memo for this
+month" otherwise), rendered by a small dependency-free `web/memo.js` covering only the memo format;
+phone layout up to 700 px; accessibility pass (focusable ranking rows, `aria-pressed` toggles,
+`aria-valuetext` on the slider, live detail region, 4.5:1 pill contrast, visible focus). Deployment only after the owner approves the host; a live "Run audit" button
 needs a hosted service and stays out unless approved.
 
 ## 10. Event-week order (rubric-weighted)

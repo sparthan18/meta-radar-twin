@@ -184,6 +184,19 @@ def main() -> int:
     (WEB_DATA / "spans.json").write_text(json.dumps(
         {"cutoffs": cutoffs, "spans": spans_out}))
 
+    # --- memos: verbatim copies for the cutoffs that have one, renamed
+    # from memo_<cutoff>.md to <cutoff>.md so the page fetches
+    # data/memos/<cutoff>.md (SPEC 8). Clear stale copies first so no
+    # memos in out/ means no memos in web/data.
+    for stale in (WEB_DATA / "memos").glob("*.md"):
+        stale.unlink()
+    for memo in sorted(OUT.glob("memo_*.md")):
+        cutoff_part = memo.stem[5:] if memo.stem.startswith("memo_") else memo.stem
+        shutil.copyfile(memo, WEB_DATA / "memos" / f"{cutoff_part}.md")
+    memo_cutoffs = sorted(
+        c for c in cutoffs if (WEB_DATA / "memos" / f"{c}.md").exists()
+    )
+
     # --- decisions.json: verbatim from out/model_decisions_<cutoff>.csv.
     decisions: dict[str, dict] = {}
     owner: dict[str, dict] = {}
@@ -267,6 +280,7 @@ def main() -> int:
         "cutoffs": cutoffs,
         "decisions": decisions,
         "owner": owner,
+        "memo_cutoffs": memo_cutoffs,
     }))
 
     # --- scatterers.geojson: one point per bound scatterer. Whole-period
@@ -341,13 +355,6 @@ def main() -> int:
     # (scripts/render_s1_chip.py wrote them into out/).
     shutil.copyfile(OUT / "s1_amplitude.png", WEB_DATA / "s1_amplitude.png")
     shutil.copyfile(OUT / "s1_amplitude.json", WEB_DATA / "s1_amplitude.json")
-
-    # --- memos: verbatim copies for the cutoffs that have one. Clear
-    # stale copies first so no memos in out/ means no memos in web/data.
-    for stale in (WEB_DATA / "memos").glob("*.md"):
-        stale.unlink()
-    for memo in sorted(OUT.glob("memo_*.md")):
-        shutil.copyfile(memo, WEB_DATA / "memos" / memo.name)
 
     files = ["bridges.geojson", "spans.json", "decisions.json",
              "scatterers.geojson", "scatterer_velocity.json", "sam.geojson",

@@ -10,7 +10,9 @@ key and the per-bridge owner_condition_alert; not-monitored bridges carry
 their reason; no whole-period EGMS values (also in the phase-5c files);
 scatterer ids match between scatterer_velocity.json and scatterers.geojson
 with 33 entries each; per-bridge means of the exported values match
-decisions.json vel to 0.1; the s1 corners lie inside the Dresden bbox.
+decisions.json vel to 0.1; the s1 corners lie inside the Dresden bbox;
+memo_cutoffs lists exactly the memos/<cutoff>.md files on disk with none
+after the last cutoff.
 Exits non-zero on any failure.
 
 Usage::
@@ -457,6 +459,32 @@ def run_checks(data_dir: Path, out_dir: Path) -> list[str]:
                 if not (minlon <= lon <= maxlon and minlat <= lat <= maxlat):
                     errors.append(f"s1_amplitude.json corner {corner!r} "
                                   f"outside the Dresden bbox")
+
+    # 12. memo index matches the exported memo files (phase 5d): every
+    # listed cutoff has its memos/<cutoff>.md file, every file on disk is
+    # listed, and no listed cutoff is after the last cutoff.
+    memo_cutoffs = decisions.get("memo_cutoffs")
+    if memo_cutoffs is None:
+        errors.append("decisions.json: missing memo_cutoffs list")
+        memo_cutoffs = []
+    elif not isinstance(memo_cutoffs, list):
+        errors.append("decisions.json: memo_cutoffs is not a list")
+        memo_cutoffs = []
+    else:
+        memos_dir = data_dir / "memos"
+        on_disk = sorted(p.stem for p in memos_dir.glob("*.md")) \
+            if memos_dir.is_dir() else []
+        for c in memo_cutoffs:
+            if not (memos_dir / f"{c}.md").exists():
+                errors.append(f"memo_cutoffs: {c!r} listed but "
+                              f"memos/{c}.md is missing")
+            if cutoffs and c > cutoffs[-1]:
+                errors.append(f"memo_cutoffs: {c!r} is after the last "
+                              f"cutoff {cutoffs[-1]}")
+        for stem in on_disk:
+            if stem not in memo_cutoffs:
+                errors.append(f"memos/{stem}.md exists but is not listed "
+                              f"in memo_cutoffs")
     return errors
 
 
@@ -528,6 +556,27 @@ def self_test() -> int:
             sv["mean_velocity"] = 0.0
             sv_path.write_text(json.dumps(sv))
             return
+        if kind == "memo-listed-without-file":
+            dec_path = data_dir / "decisions.json"
+            dec = json.loads(dec_path.read_text())
+            dec["memo_cutoffs"] = dec.get("memo_cutoffs", []) + [dec["cutoffs"][0]]
+            dec_path.write_text(json.dumps(dec))
+            return
+        if kind == "memo-file-unlisted":
+            dec_path = data_dir / "decisions.json"
+            dec = json.loads(dec_path.read_text())
+            (data_dir / "memos" / f"{dec['cutoffs'][0]}.md").write_text(
+                "# planted memo\n")
+            return
+        if kind == "memo-after-last":
+            # List a cutoff after the last one AND create its file, so the
+            # only error is the after-last check (proving that check alone).
+            dec_path = data_dir / "decisions.json"
+            dec = json.loads(dec_path.read_text())
+            dec.setdefault("memo_cutoffs", []).append("2999-01-01")
+            dec_path.write_text(json.dumps(dec))
+            (data_dir / "memos" / "2999-01-01.md").write_text("# future memo\n")
+            return
         dec_path = data_dir / "decisions.json"
         dec = json.loads(dec_path.read_text())
         cutoffs = dec["cutoffs"]
@@ -573,7 +622,9 @@ def self_test() -> int:
              "whole-period", "whole-period-name",
              "scatterer-id-mismatch", "scatterer-mean-mismatch",
              "scatterer-array-len", "s1-corner-outside",
-             "whole-period-newfile"]
+             "whole-period-newfile",
+             "memo-listed-without-file", "memo-file-unlisted",
+             "memo-after-last"]
     failed = False
     for kind in kinds:
         tmp_data = _copy_data(data_src)
