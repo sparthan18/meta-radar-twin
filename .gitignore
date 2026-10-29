@@ -7,3 +7,4 @@ out/
 web/node_modules/
 muse/logs/
 .DS_Store
+!web/data/

@@ -69,6 +69,20 @@ Status: model decisions exist for all 33 cutoffs (2022-01-01 to 2024-09-01); the
 
 Validation: the pipeline reproduces an independent implementation of SPEC.md to < 0.05 mm/yr (max |score difference| over every bridge and cutoff versus `reference/dresden_scores.csv`).
 
+## Web map (`web/`)
+
+Phases 5a and 5b. Export once, then serve the static page locally:
+
+```sh
+.venv/bin/python scripts/export_web.py      # out/ -> web/data/ (no API calls)
+.venv/bin/python scripts/check_web_data.py  # validate web/data against SPEC 8
+cd web && python -m http.server 8137        # then open http://localhost:8137/
+```
+
+Use an unused port (8765 was taken on this machine). `export_web.py` reads `out/` only and writes `web/data/bridges.geojson` (simplified footprints), `spans.json` (per-span vertical-change series), `decisions.json` (model + rubric side by side for all 33 cutoffs), `scatterers.geojson` (3,694 points, position and track only; no whole-period EGMS values), `sam.geojson` (SAM polygons with IoU; `bright_fraction` is null because the radar chip lives under `data/`, which the exporter must not read) and `memos/*.md` (verbatim copies of any audit memos in `out/`; none until the audit is rerun on the leak-free data). Total under 1 MB (limit 3 MB).
+
+The page (`web/index.html`, MapLibre GL 4.7.1 from unpkg, no build step) shows bridges coloured by the model risk at the selected month via feature-state, a month slider with one step per cutoff, an event badge on the Sep-2024 step ("Carolabrücke collapsed 10 days after this cutoff"), a legend, a ranking list sorted by model risk, then rank (rank, name, score, model risk pill, inspect flag) and a detail panel (scatterers, tracks, rank, score, wmax, wspread, z, velocity, escalation history, flag chips, model vote shares out of 5 beside the rubric verdict, and a per-span SVG chart showing only months up to the selected cutoff with the collapse marker only on the event month). Span dots use a blue-white-red scale over ±4 mm/yr and open a popup with that span's value at the selected month. Below zoom 15 each bridge also gets a risk-coloured marker. Augustusbrücke is grey with a dashed outline and "not monitored by radar" plus its reason; its length (≈ 354 m) is the long side of the minimum rotated rectangle. Owner condition appears only in its own labelled block. No external calls other than the MapLibre script/CSS and the Esri basemap tiles (World Imagery and Canvas World Dark Gray).
+
 ## SAM 3.1 notes
 
 Phase 2 segments the Sentinel-2 `visual` chip (`data/carola/s2_visual.tif`, 93×91 px at 10 m) with SAM 3.1 via `POST /v1/responses` (model `sam-3.1`, `metadata={"include_confidence":"true"}`). Run:

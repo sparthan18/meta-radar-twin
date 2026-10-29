@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RadarTwin Dresden — bridge watchlist hindcast</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+:root {
+  --bg: #ffffff; --panel: #f6f8fa; --card: #ffffff;
+  --text: #16202b; --muted: #5b6b7c; --border: #dbe2ea;
+  --accent: #1d4ed8; --chip: #eef2f6;
+  --risk-none: #4b5563; --risk-watch: #eab308; --risk-elevated: #f97316;
+  --risk-high: #ef4444; --risk-unknown: #9ca3af;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e141c; --panel: #151e29; --card: #182231;
+    --text: #e8eef5; --muted: #9aa9bc; --border: #2a3747;
+    --accent: #7cb3ff; --chip: #223041;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; }
+header { padding: 12px 16px; border-bottom: 1px solid var(--border);
+  background: var(--panel); }
+header h1 { margin: 0 0 2px; font-size: 19px; font-weight: 650; }
+header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70em; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1 1 340px; }
+.slider-wrap input[type="range"] { flex: 1; min-width: 160px; }
+#cutoffLabel { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 7em; }
+#eventBadge { visibility: hidden; background: #7f1d1d; color: #fff; border-radius: 4px;
+  padding: 3px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+#eventBadge.show { visibility: visible; }
+.basemap-toggle { display: flex; gap: 6px; }
+.basemap-toggle button, .pill-btn { border: 1px solid var(--border); background: var(--card);
+  color: var(--text); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+.basemap-toggle button.active { border-color: var(--accent); color: var(--accent);
+  font-weight: 600; }
+main { display: flex; min-height: calc(100vh - 148px); }
+#map { flex: 1 1 60%; min-height: 420px; }
+#side { flex: 0 0 400px; max-width: 44vw; border-left: 1px solid var(--border);
+  background: var(--panel); padding: 12px; overflow-y: auto; max-height: calc(100vh - 148px); }
+@media (max-width: 900px) {
+  main { flex-direction: column; }
+  #side { max-width: none; border-left: 0; border-top: 1px solid var(--border);
+    max-height: none; }
+}
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 10px;
+  font-size: 12.5px; color: var(--muted); }
+.legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+  margin-right: 5px; vertical-align: -1px; }
+h2 { font-size: 14px; margin: 12px 0 6px; }
+#ranking { list-style: none; margin: 0; padding: 0; }
+#ranking li { display: flex; gap: 8px; align-items: center; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: 5px; margin-bottom: 4px;
+  background: var(--card); cursor: pointer; }
+#ranking li.selected { border-color: var(--accent); }
+#ranking .rank { width: 2em; text-align: right; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+#ranking .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ranking .sc { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.2em;
+  text-align: right; }
+.pill { border-radius: 20px; padding: 1px 9px; font-size: 12px; font-weight: 600;
+  color: #fff; white-space: nowrap; }
+.pill.none { background: var(--risk-none); }
+.pill.watch { background: var(--risk-watch); color: #1c1917; }
+.pill.elevated { background: var(--risk-elevated); }
+.pill.high { background: var(--risk-high); }
+.pill.unknown { background: var(--risk-unknown); color: #1f2937; }
+.inspect-flag { font-size: 11.5px; color: var(--risk-high); font-weight: 700;
+  white-space: nowrap; }
+#detail { border: 1px solid var(--border); border-radius: 6px; background: var(--card);
+  padding: 10px 12px; margin-top: 6px; }
+#detail h3 { margin: 0 0 2px; font-size: 16px; }
+.notmon { color: var(--muted); font-style: italic; }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px;
+  margin: 8px 0; font-variant-numeric: tabular-nums; }
+.stat-grid dt { color: var(--muted); font-size: 12px; }
+.stat-grid dd { margin: 0 0 4px; font-size: 13.5px; }
+.flags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+.flag { font-size: 11.5px; border-radius: 4px; padding: 1px 7px; background: var(--chip);
+  color: var(--muted); border: 1px solid var(--border); }
+.flag.on { background: #1f3a5f; color: #fff; border-color: #1f3a5f; }
+@media (prefers-color-scheme: dark) { .flag.on { background: #2f5b94; border-color: #2f5b94; } }
+.vs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+.vs .col { border: 1px solid var(--border); border-radius: 5px; padding: 7px 9px; }
+.vs h4 { margin: 0 0 5px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.prob { margin: 4px 0; font-size: 12px; }
+.prob .bar { height: 6px; border-radius: 3px; background: var(--chip);
+  border: 1px solid var(--border); margin-top: 2px; }
+.prob .fill { height: 100%; border-radius: 3px; background: var(--accent); }
+#chart { width: 100%; height: 190px; display: block; }
+.owner-block { border: 1px dashed var(--border); border-radius: 5px; padding: 7px 9px;
+  margin-top: 8px; font-size: 12.5px; }
+.owner-block h4 { margin: 0 0 4px; font-size: 12.5px; }
+.owner-block blockquote { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
+  border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <h1>RadarTwin Dresden — bridge watchlist hindcast</h1>
+  <p>Monthly radar ranking of 20 Dresden bridges from EGMS ground motion, Jan 2022 – Sep 2024.
+  Colour is the Muse Spark model risk at the selected month; the replay never shows later months.
+  EGMS lags the present by about a year. This ranks assets for inspection; it does not predict failure.</p>
+  <div class="controls">
+    <div class="slider-wrap">
+      <label for="slider">Month</label>
+      <input id="slider" type="range" min="0" max="32" value="32" step="1">
+      <span id="cutoffLabel">2024-09-01</span>
+      <span id="eventBadge">Carolabrücke collapsed ?? days after this cutoff (11 Sep 2024)</span>
+    </div>
+    <div class="basemap-toggle" role="group" aria-label="Basemap">
+      <button id="btnImagery" class="active" type="button">Imagery</button>
+      <button id="btnDark" type="button">Dark</button>
+    </div>
+  </div>
+</header>
+<main>
+  <div id="map"></div>
+  <aside id="side">
+    <div class="legend" id="legend">
+      <span><span class="sw" style="background:#4b5563"></span>none</span>
+      <span><span class="sw" style="background:#eab308"></span>watch</span>
+      <span><span class="sw" style="background:#f97316"></span>elevated</span>
+      <span><span class="sw" style="background:#ef4444"></span>high</span>
+      <span><span class="sw" style="background:#9ca3af"></span>not monitored</span>
+      <span>span dots: −4 (blue) … +4 (red) mm/yr vertical change</span>
+    </div>
+    <h2>Ranking at <span id="rankCutoff">2024-09-01</span></h2>
+    <ol id="ranking"></ol>
+    <h2>Detail</h2>
+    <div id="detail"><p class="notmon">Select a bridge.</p></div>
+  </aside>
+</main>
+<footer>Model: muse-spark-1.3 (5 votes per question) checked against a deterministic rubric. Owner condition is an external input shown only in its own block. Basemap: Esri World Imagery / Esri Canvas World Dark Gray.</footer>
+<script>
+"use strict";
+const RISK_COLORS = { none: "#4b5563", watch: "#eab308", elevated: "#f97316",
+  high: "#ef4444", unknown: "#9ca3af" };
+const SPAN_COLORS = ["#1f77b4","#d62728","#2ca02c","#9467bd","#ff7f0e",
+  "#8c564b","#e377c2","#7f7f7f","#17becf","#bcbd22"];
+let CUT = [], DEC = {}, BRIDGES = [], SPANS = {}, OWNER = {}, EVENT_DATE = "", EVENT_MONTH = "";
+let ID2NAME = {}, NAME2ID = {}, BRIDGE_PROPS = {};
+let map = null, selectedId = "4", cutoffIdx = 32;
+let EVENT_ASSET = "Carolabrücke";
+let spanPopup = null;
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function fmtEventDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  if (!m) return iso || "";
+  return `${Number(m[3])} ${MONTHS_SHORT[Number(m[2]) - 1]} ${m[1]}`;
+}
+function daysAfter(cutoff, eventIso) {
+  return Math.round((Date.parse(eventIso) - Date.parse(cutoff)) / 86400000);
+}
+function isEventMonth(cutoff) {
+  return !!EVENT_DATE && !!cutoff && cutoff.slice(0, 7) === EVENT_DATE.slice(0, 7);
+}
+function eventBadgeText(cutoff) {
+  const n = daysAfter(cutoff, EVENT_DATE);
+  return `${EVENT_ASSET} collapsed ${n} days after this cutoff (${fmtEventDate(EVENT_DATE)})`;
+}
+
+const $ = (id) => document.getElementById(id);
+const fmt = (v, d) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(d);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function riskOf(cutoff, bid) {
+  const d = DEC[cutoff][bid];
+  if (!d || d.model === null || d.model === undefined) return "unknown";
+  return d.model.risk;
+}
+
+function initMap() {
+  map = new maplibregl.Map({
+    container: "map",
+    style: {
+      version: 8,
+      sources: {
+        esri: { type: "raster",
+          tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+          tileSize: 256,
+          attribution: "Esri World Imagery" },
+        esri_dark: { type: "raster",
+          tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"],
+          tileSize: 256,
+          attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors" }
+      },
+      layers: [
+        { id: "esri-layer", type: "raster", source: "esri",
+          paint: { "raster-saturation": -0.7, "raster-contrast": 0.05 } },
+        { id: "esri-dark-layer", type: "raster", source: "esri_dark",
+          layout: { visibility: "none" } }
+      ]
+    },
+    center: [13.745, 51.057], zoom: 12
+  });
+  map.addControl(new maplibregl.NavigationControl(), "top-left");
+  map.on("load", () => {
+    map.addSource("bridges", { type: "geojson",
+      data: "data/bridges.geojson", promoteId: "id" });
+    const spanFc = { type: "FeatureCollection", features: [] };
+    for (const [bid, arr] of Object.entries(SPANS)) {
+      for (const s of arr) {
+        spanFc.features.push({ type: "Feature",
+          properties: { sid: bid + "-" + s.span, bridge: bid, span: s.span, n: s.n },
+          geometry: { type: "Point", coordinates: [s.lon, s.lat] } });
+      }
+    }
+    map.addSource("spans", { type: "geojson", data: spanFc, promoteId: "sid" });
+    const centroidFc = { type: "FeatureCollection", features: [] };
+    for (const f of BRIDGES) {
+      const geom = f.geometry;
+      let rings = [];
+      if (geom.type === "Polygon") rings = [geom.coordinates[0]];
+      else if (geom.type === "MultiPolygon") rings = geom.coordinates.map((p) => p[0]);
+      let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+      for (const ring of rings) {
+        for (const c of ring) {
+          if (c[0] < minLon) minLon = c[0];
+          if (c[0] > maxLon) maxLon = c[0];
+          if (c[1] < minLat) minLat = c[1];
+          if (c[1] > maxLat) maxLat = c[1];
+        }
+      }
+      if (!isFinite(minLon)) continue;
+      centroidFc.features.push({ type: "Feature",
+        properties: { id: String(f.properties.id), monitored: f.properties.monitored },
+        geometry: { type: "Point",
+          coordinates: [(minLon + maxLon) / 2, (minLat + maxLat) / 2] } });
+    }
+    map.addSource("bridge-centroids", { type: "geojson", data: centroidFc,
+      promoteId: "id" });
+    const riskExpr = ["match", ["feature-state", "risk"],
+      "high", RISK_COLORS.high, "elevated", RISK_COLORS.elevated,
+      "watch", RISK_COLORS.watch, "none", RISK_COLORS.none, RISK_COLORS.unknown];
+    map.addLayer({ id: "bridges-fill", type: "fill", source: "bridges",
+      paint: { "fill-color": riskExpr, "fill-opacity": 0.38 } });
+    map.addLayer({ id: "bridges-line", type: "line", source: "bridges",
+      filter: ["==", ["get", "monitored"], true],
+      paint: { "line-color": riskExpr, "line-width": 2.5 } });
+    map.addLayer({ id: "bridges-dashed", type: "line", source: "bridges",
+      filter: ["==", ["get", "monitored"], false],
+      paint: { "line-color": RISK_COLORS.unknown, "line-width": 2,
+        "line-dasharray": [3, 2.5] } });
+    map.addLayer({ id: "bridges-markers", type: "circle", source: "bridge-centroids",
+      maxzoom: 15,
+      paint: { "circle-color": riskExpr, "circle-radius": 8, "circle-opacity": 0.9,
+        "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
+    map.addLayer({ id: "spans-circles", type: "circle", source: "spans",
+      paint: {
+        "circle-color": ["interpolate", ["linear"],
+          ["coalesce", ["feature-state", "v"], 0],
+          -4, "#2166ac", -2, "#abd9e9", 0, "#f5f5f5", 2, "#fdae61", 4, "#b2182b"],
+        "circle-radius": 6, "circle-opacity": 0.92,
+        "circle-stroke-color": "#ffffff", "circle-stroke-width": 1 } });
+    map.on("click", "bridges-fill", (e) => {
+      if (e.features && e.features.length) selectBridge(String(e.features[0].properties.id));
+    });
+    map.on("click", "bridges-markers", (e) => {
+      if (e.features && e.features.length) selectBridge(String(e.features[0].properties.id));
+    });
+    map.on("click", "spans-circles", (e) => {
+      if (!e.features || !e.features.length) return;
+      const fp = e.features[0].properties;
+      const bid = String(fp.bridge);
+      const spanId = fp.span;
+      selectBridge(bid);
+      const arr = SPANS[bid] || [];
+      const entry = arr.find((s) => String(s.span) === String(spanId));
+      const aval = entry ? entry.anomaly[cutoffIdx] : null;
+      const vtxt = (aval === null || aval === undefined || Number.isNaN(aval))
+        ? "no data" : `${Number(aval).toFixed(2)} mm/yr`;
+      if (spanPopup) { spanPopup.remove(); spanPopup = null; }
+      spanPopup = new maplibregl.Popup({ closeButton: true, maxWidth: "230px" })
+        .setLngLat(e.lngLat)
+        .setHTML(`<div><strong>${esc(ID2NAME[bid] || bid)}</strong><br>span ${esc(String(spanId))}<br>${esc(vtxt)} at ${esc(CUT[cutoffIdx])}</div>`)
+        .addTo(map);
+    });
+    map.getCanvas().style.cursor = "pointer";
+    applyCutoff();
+  });
+  $("btnImagery").onclick = () => {
+    map.setLayoutProperty("esri-layer", "visibility", "visible");
+    map.setLayoutProperty("esri-dark-layer", "visibility", "none");
+    $("btnImagery").classList.add("active"); $("btnDark").classList.remove("active");
+  };
+  $("btnDark").onclick = () => {
+    map.setLayoutProperty("esri-layer", "visibility", "none");
+    map.setLayoutProperty("esri-dark-layer", "visibility", "visible");
+    $("btnDark").classList.add("active"); $("btnImagery").classList.remove("active");
+  };
+}
+
+function applyCutoff() {
+  const cutoff = CUT[cutoffIdx];
+  $("cutoffLabel").textContent = cutoff;
+  $("rankCutoff").textContent = cutoff;
+  // Event badge: only on the cutoff whose month contains the event date.
+  // The day count is computed from the dates. The badge slot is always
+  // reserved (visibility), so the slider never changes width.
+  const badge = $("eventBadge");
+  if (isEventMonth(cutoff)) badge.textContent = eventBadgeText(cutoff);
+  badge.classList.toggle("show", isEventMonth(cutoff));
+  // Span popup shows the selected month's value; close it on month change.
+  if (spanPopup) { spanPopup.remove(); spanPopup = null; }
+  if (map && map.getSource("bridges")) {
+    for (const bid of Object.keys(ID2NAME)) {
+      const rk = riskOf(cutoff, bid);
+      map.setFeatureState({ source: "bridges", id: bid }, { risk: rk });
+      if (map.getSource("bridge-centroids")) {
+        map.setFeatureState({ source: "bridge-centroids", id: bid }, { risk: rk });
+      }
+    }
+    for (const [bid, arr] of Object.entries(SPANS)) {
+      for (const s of arr) {
+        const v = s.anomaly[cutoffIdx];
+        map.setFeatureState({ source: "spans", id: bid + "-" + s.span },
+          { v: (v === null || v === undefined) ? 0 : v });
+      }
+    }
+  }
+  renderRanking(cutoff);
+  renderDetail(cutoff, selectedId);
+}
+
+function renderRanking(cutoff) {
+  const table = DEC[cutoff];
+  const rows = Object.keys(ID2NAME).map((bid) => ({ bid, d: table[bid] }));
+  const RISK_ORDER = { high: 0, elevated: 1, watch: 2, none: 3, unknown: 4 };
+  rows.sort((a, b) => {
+    const riskA = a.d.model ? a.d.model.risk : "unknown";
+    const riskB = b.d.model ? b.d.model.risk : "unknown";
+    const oa = RISK_ORDER[riskA] ?? 4, ob = RISK_ORDER[riskB] ?? 4;
+    if (oa !== ob) return oa - ob;
+    const ra = a.d.rank === null ? 999 : a.d.rank;
+    const rb = b.d.rank === null ? 999 : b.d.rank;
+    return ra - rb || ID2NAME[a.bid].localeCompare(ID2NAME[b.bid]);
+  });
+  const ol = $("ranking");
+  ol.innerHTML = "";
+  for (const { bid, d } of rows) {
+    const li = document.createElement("li");
+    if (bid === selectedId) li.classList.add("selected");
+    const risk = d.model ? d.model.risk : "unknown";
+    const pill = d.model
+      ? `<span class="pill ${esc(risk)}">${esc(risk)}</span>`
+      : `<span class="pill unknown">not monitored</span>`;
+    const insp = d.model && d.model.inspect ? `<span class="inspect-flag">inspect</span>` : "";
+    li.innerHTML = `<span class="rank">${d.rank === null ? "—" : d.rank}</span>` +
+      `<span class="nm">${esc(ID2NAME[bid])}</span>` +
+      `<span class="sc">${fmt(d.score, 2)}</span>${pill}${insp}`;
+    li.onclick = () => selectBridge(bid);
+    ol.appendChild(li);
+  }
+}
+
+function probBar(label, v) {
+  const pct = (v === null || v === undefined) ? 0 : Math.round(100 * v);
+  const k = (v === null || v === undefined || Number.isNaN(Number(v)))
+    ? null : Math.round(Number(v) * 5);
+  const txt = (k === null) ? "—" : `${k} of 5`;
+  return `<div class="prob">${esc(label)} ${txt}<div class="bar"><div class="fill" style="width:${pct}%"></div></div></div>`;
+}
+
+function chartSVG(bid) {
+  // Only months up to the selected cutoff; collapse marker only on the event
+  // month, drawn in reserved space outside the data window.
+  const arr = SPANS[bid] || [];
+  const W = 340, H = 190, L = 34, R = 8, T = 8, B = 22;
+  const n = cutoffIdx + 1;
+  const ymin = -5, ymax = 5;
+  const showEvent = isEventMonth(CUT[cutoffIdx]);
+  const plotRight = showEvent ? (W - R - 70) : (W - R);
+  const Xf = (i) => (n <= 1) ? L : L + (i * (plotRight - L)) / (n - 1);
+  const Y = (v) => T + ((ymax - v) / (ymax - ymin)) * (H - T - B);
+  let s = `<svg id="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Per-span anomaly up to ${esc(CUT[cutoffIdx])}">`;
+  for (const g of [-4, 0, 4]) {
+    s += `<line x1="${L}" y1="${Y(g)}" x2="${plotRight}" y2="${Y(g)}" stroke="#888" stroke-width="${g === 0 ? 1 : 0.5}" stroke-dasharray="${g === 0 ? "none" : "3,3"}" opacity="0.6"/>`;
+    s += `<text x="${L - 4}" y="${Y(g) + 3}" font-size="9" text-anchor="end" fill="currentColor">${g}</text>`;
+  }
+  arr.forEach((sp, k) => {
+    const col = SPAN_COLORS[k % SPAN_COLORS.length];
+    let seg = [];
+    const flush = () => {
+      if (seg.length > 1) {
+        s += `<polyline fill="none" stroke="${col}" stroke-width="1.6" points="${seg.join(" ")}"/>`;
+      } else if (seg.length === 1) {
+        const [cx, cy] = seg[0].split(",").map(Number);
+        s += `<circle cx="${cx}" cy="${cy}" r="2" fill="${col}"/>`;
+      }
+      seg = [];
+    };
+    for (let i = 0; i < n; i++) {
+      const v = sp.anomaly[i];
+      if (v === null || v === undefined || Number.isNaN(v)) { flush(); continue; }
+      const vv = Math.max(ymin, Math.min(ymax, v));
+      seg.push(`${Xf(i).toFixed(1)},${Y(vv).toFixed(1)}`);
+    }
+    flush();
+  });
+  if (showEvent) {
+    const ndays = daysAfter(CUT[cutoffIdx], EVENT_DATE);
+    const ex = plotRight + 35;
+    s += `<line x1="${ex}" y1="${T}" x2="${ex}" y2="${H - B}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+    s += `<text x="${ex}" y="${T + 10}" font-size="9" text-anchor="middle" fill="#ef4444">collapsed</text>`;
+    s += `<text x="${ex}" y="${T + 21}" font-size="9" text-anchor="middle" fill="#ef4444">+${ndays}d &#8594;</text>`;
+    s += `<text x="${ex}" y="${T + 32}" font-size="8" text-anchor="middle" fill="#ef4444">(${esc(fmtEventDate(EVENT_DATE))})</text>`;
+  }
+  const first = CUT[0] ? CUT[0].slice(0, 7) : "";
+  const last = CUT[cutoffIdx] ? CUT[cutoffIdx].slice(0, 7) : "";
+  s += `<text x="${L}" y="${H - 6}" font-size="9" fill="currentColor">${esc(first)}</text>`;
+  s += `<text x="${plotRight}" y="${H - 6}" font-size="9" text-anchor="end" fill="currentColor">${esc(last)}</text>`;
+  s += "</svg>";
+  return s;
+}
+
+function renderDetail(cutoff, bid) {
+  const box = $("detail");
+  const name = ID2NAME[bid];
+  if (!name || !DEC[cutoff] || !DEC[cutoff][bid]) {
+    box.innerHTML = `<p class="notmon">Select a bridge.</p>`;
+    return;
+  }
+  const d = DEC[cutoff][bid];
+  const props = BRIDGE_PROPS[bid] || {};
+  const nSpan = (SPANS[bid] || []).length;
+  if (d.model === null || d.model === undefined) {
+    box.innerHTML = `<h3>${esc(name)}</h3>
+      <p class="notmon">not monitored by radar — ${esc(d.reason || props.reason || "")}</p>
+      <dl class="stat-grid">
+        <dt>scatterers</dt><dd>${props.n ?? "—"}</dd>
+        <dt>tracks</dt><dd>${props.tracks ?? "—"}</dd>
+        <dt>length</dt><dd>${props.len_m === null || props.len_m === undefined ? "—" : `≈ ${props.len_m} m`}</dd>
+        <dt>points / ha</dt><dd>${fmt(props.points_per_ha, 1)}</dd>
+        <dt>radar coverage</dt><dd>none</dd>
+      </dl>
+      <p class="notmon">Radar sees too little of this structure to rank it; it needs another inspection method. This is not a sign it is safe.</p>`;
+    return;
+  }
+  const m = d.model, r = d.rubric;
+  const mse = d.months_since_esc === null ? "—" : d.months_since_esc + " mo";
+  const flags = ["moving", "accelerating", "differential", "outlier",
+    "low_quality", "low_coverage", "escalate"].map((f) =>
+      `<span class="flag${d.flags[f] ? " on" : ""}">${esc(f)}</span>`).join("");
+  const owner = OWNER[name];
+  const ownerHtml = owner
+    ? `<div class="owner-block"><h4>Owner condition (external input)</h4>` +
+      `<div>grade: <strong>${esc(owner.condition)}</strong></div>` +
+      `<blockquote>${esc(owner.source)}</blockquote></div>`
+    : "";
+  box.innerHTML = `<h3>${esc(name)}</h3>
+    <dl class="stat-grid">
+      <dt>scatterers</dt><dd>${props.n ?? "—"}</dd>
+      <dt>tracks</dt><dd>${props.tracks ?? "—"}</dd>
+      <dt>city rank</dt><dd>${d.rank} of 19</dd>
+      <dt>score</dt><dd>${fmt(d.score, 3)} mm/yr</dd>
+      <dt>wmax</dt><dd>${fmt(d.wmax, 3)} mm/yr</dd>
+      <dt>wspread</dt><dd>${fmt(d.wspread, 3)} mm/yr</dd>
+      <dt>z (own history)</dt><dd>${fmt(d.z, 2)}</dd>
+      <dt>long-term vel.</dt><dd>${fmt(d.vel, 2)} mm/yr</dd>
+      <dt>escalations 12m</dt><dd>${d.escalations_12m}</dd>
+      <dt>months since esc.</dt><dd>${esc(mse)}</dd>
+      <dt>radar coverage</dt><dd>${esc(d.radar_coverage)}</dd>
+      <dt>spans</dt><dd>${nSpan}</dd>
+    </dl>
+    <div class="flags">${flags}</div>
+    <div class="vs">
+      <div class="col"><h4>Model (Muse Spark)</h4>
+        <div>${esc(m.pattern)} <span class="pill ${esc(m.risk)}">${esc(m.risk)}</span></div>
+        <div style="font-size:12px;margin-top:2px">inspect: ${m.inspect ? "yes" : "no"}</div>
+        ${probBar("votes for this risk", m.p_risk)}${probBar("votes for high", m.p_high)}${probBar("votes for inspect", m.p_inspect)}
+      </div>
+      <div class="col"><h4>Rubric (deterministic)</h4>
+        <div>${esc(r.pattern)} <span class="pill ${esc(r.risk)}">${esc(r.risk)}</span></div>
+        <div style="font-size:12px;margin-top:2px">inspect: ${r.inspect ? "yes" : "no"}</div>
+      </div>
+    </div>
+    <h4 style="margin:6px 0 2px;font-size:12.5px;color:var(--muted)">Per-span anomaly to ${esc(cutoff)} (mm/yr, + up)</h4>
+    ${chartSVG(bid)}
+    ${ownerHtml}`;
+}
+
+function selectBridge(bid) {
+  if (!ID2NAME[bid]) return;
+  selectedId = bid;
+  renderRanking(CUT[cutoffIdx]);
+  renderDetail(CUT[cutoffIdx], bid);
+  $("detail").scrollIntoView({ block: "nearest" });
+}
+
+async function boot() {
+  const [b, dec, sp] = await Promise.all([
+    fetch("data/bridges.geojson").then((r) => r.json()),
+    fetch("data/decisions.json").then((r) => r.json()),
+    fetch("data/spans.json").then((r) => r.json())
+  ]);
+  BRIDGES = b.features; DEC = dec.decisions; CUT = dec.cutoffs;
+  SPANS = sp.spans; OWNER = dec.owner || {};
+  EVENT_DATE = dec.event_date || ""; EVENT_MONTH = EVENT_DATE.slice(0, 7) + "-01";
+  EVENT_ASSET = dec.event_asset || "Carolabrücke";
+  if (EVENT_DATE && EVENT_MONTH) {
+    $("eventBadge").textContent = eventBadgeText(EVENT_MONTH);
+  }
+  for (const f of BRIDGES) {
+    const p = f.properties;
+    ID2NAME[String(p.id)] = p.name; NAME2ID[p.name] = String(p.id);
+    BRIDGE_PROPS[String(p.id)] = p;
+  }
+  if (!ID2NAME[selectedId]) selectedId = Object.keys(ID2NAME).sort()[0];
+  cutoffIdx = CUT.length - 1;
+  const slider = $("slider");
+  slider.min = "0"; slider.max = String(CUT.length - 1); slider.value = String(cutoffIdx);
+  slider.oninput = () => { cutoffIdx = Number(slider.value); applyCutoff(); };
+  initMap();
+  applyCutoff();
+}
+boot().catch((e) => {
+  document.getElementById("detail").innerHTML =
+    `<p>Failed to load map data: ${esc(e.message)}. Serve <code>web/</code> over HTTP (see README) rather than opening the file directly.</p>`;
+});
+</script>
+</body>
+</html>
