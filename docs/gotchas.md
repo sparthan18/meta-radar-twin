@@ -50,6 +50,12 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 - **Fix:** "high" only when escalating now. "Elevated" for 3 months after an escalation. The 12-month count is reported as evidence, not used to raise the level. Result: 1–4 high bridges a month, median 1, and Carola is the only high bridge in Aug and Sep 2024.
 - **Insight:** simulate a rule against every month of real data before adopting it. A rule that sounds sensible can turn the alert list into noise.
 
+### A precomputed velocity is a whole-period number
+- **What you see:** `long_term_velocity_mm_yr` is identical at every cutoff (Carolabrücke −0.22 mm/yr from Jan 2022 to Sep 2024).
+- **Why:** it is the mean of EGMS `mean_velocity`, which EGMS fits over the whole release period. At an early cutoff that number already contains later months.
+- **Fix:** compute any velocity used for a cutoff from the displacement series up to that cutoff, or leave it out. Check every input for "does this value change with the cutoff?" Today no bridge passes the 1.5 mm/yr `moving` threshold, so no decision changes, but the value still reaches the model input.
+- **Same trap, bigger effect:** EGMS `temporal_coherence` is also whole-period, and it set the span weights behind every score. Recomputing it per cutoff changed 45 of 627 bridge-months of rubric risk. Test it with truncation: delete every epoch on or after the cutoff and require identical outputs (`scripts/check_truncation.py`).
+
 ### Retrospective tools must not return the future
 - **What you see:** the audit tool that returns a bridge's span history returned every month to Sep 2024, even for the Oct 2023 memo.
 - **Why:** the tool read the full rolling table instead of the rows up to its run's cutoff.
@@ -152,9 +158,36 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 ### Headless mode shows nothing until the end
 - **Fix:** run the interactive TUI in a visible terminal, `muse --trust-workspace "<prompt>"`, so progress can be watched. Sessions are saved under `~/.local/share/muse/sessions/` and can be exported with `muse export --redacted`.
 
+### An approval can be refused after you approve it
+- **What you see:** you approve a shell command and it still fails with "unmanaged shell backgrounding is not allowed".
+- **Why:** Muse's own sandbox policy runs after the human approval, and it rejects `&` background jobs on macOS.
+- **Fix:** ask for foreground commands or Muse's managed shell sessions in the prompt, and expect a second approval prompt for the managed version. A watcher should count every request that has no decision, not only those the auto-review escalated.
+
 ### Give the agent a budget and an exit
 - Every phase prompt caps paid API calls (SAM requests, Muse Spark spend) and says what to do on a 401: stop and report, never stub results.
 - Every phase prompt says "do not create git commits", so commits stay a human decision.
+
+### Muse cannot see the page, so leave visual checks to a person
+- **What you see:** asked to measure the slider width, Muse tried a local server (the sandbox refused to bind a port) and twice ran headless Brave, which produced no output. Each attempt needed a manual approval and took minutes.
+- **Fix:** have Muse prove layout by construction and list what needs a visual check; the reviewer clicks through the page in a real browser.
+
+## Web map
+
+### Thin bridges vanish at city zoom
+- **What you see:** at zoom 12 the risk-coloured bridge polygons are a few pixels wide; only the span dots show, so the risk colour is effectively invisible.
+- **Fix:** below about zoom 14, draw each bridge as a coloured marker or a thick line along its axis, and switch to the polygon when zoomed in.
+
+### CARTO basemap tiles now need an API key
+- **What you see:** the "Dark" basemap shows grey tiles stamped "API KEY REQUIRED, carto.com/basemaps/apikey". Every CARTO URL form returns the same 2.5 KB watermark tile, with or without a Referer.
+- **Fix:** use a keyless dark basemap instead, such as Esri `Canvas/World_Dark_Gray_Base` (same server and `{z}/{y}/{x}` order as World Imagery), and credit it.
+
+### The event marker on a first-of-month cutoff
+- **What you see:** cutoffs are the first of each month, so the 2024-09-01 cutoff is ten days before the 11 Sep collapse. A "collapse" badge on that step can read as if the data already knew.
+- **Fix:** word the badge as "collapse 10 days after this cutoff", so the timeline stays honest.
+
+### Layer order can bury the markers you added
+- **What you see:** the city-zoom risk markers exist (20 rendered, with the right feature-state), but the span dots are added after them, so they are drawn on top. Up to 98 mostly white dots cover the coloured markers, and Carolabrücke's red is hard to see at zoom 12.
+- **Fix:** add the marker layer after the span layer (or pass `beforeId`), or hide the span dots below the marker cut-off zoom. To verify, count rendered features with `queryRenderedFeatures` and take a screenshot.
 
 ## Environment
 

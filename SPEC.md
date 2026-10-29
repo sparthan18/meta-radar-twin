@@ -174,7 +174,28 @@ for cutoff in monthly cutoffs (2022-01-01 … event month):
     (_, up, _) = decompose(stack(L_track), stack(dv_track))           # vertical mm/yr
     roll[cutoff, span] = up
 ```
-`span_meta`: per span `n`, `tracks`, `coherence` (mean temporal_coherence), `n_eff = n·coherence`.
+`span_meta(cutoff)`: per span `n`, `tracks`, `coherence`, `n_eff = n·coherence`, where
+`coherence` is the mean **cutoff coherence** of the span's points (below), not the EGMS
+`temporal_coherence` column.
+
+**Whole-period columns are banned from every per-cutoff quantity.** EGMS fits `mean_velocity`,
+`acceleration`, `seasonality`, `temporal_coherence`, `rmse_ts` and their `_std` columns over the
+whole release (epochs to 2024-12-30, after the event), so at any earlier cutoff they contain the
+future. Recompute what is needed from the epochs before the cutoff:
+- **cutoff coherence** per point: `r` = residuals of `seasonal_fit` on that point's own-track
+  epochs with date < cutoff (≥ 24 epochs, else NaN and the point gets weight 0);
+  `γ = |mean(exp(i·4π·r/λ))|` with `λ = 55.465 mm` (Sentinel-1 C-band). This is the usual
+  temporal-coherence form; at the last epoch it should correlate with the EGMS column (report the
+  correlation, do not tune toward it).
+- **long-term velocity** per point: `linear_velocity` on the same truncated, deseasoned series.
+
+Static facts that do not change over time (position, track, LOS vector, which points exist)
+may be used at every cutoff. That EGMS only publishes points coherent over the whole release is
+a dataset-level selection we cannot undo; it is stated as a limitation, not hidden.
+
+**Truncation invariance (the leak test):** every per-cutoff value (roll, score, z, wmax,
+wspread, velocity, coherence, flags, risk) must be identical when every epoch on or after the
+cutoff is deleted from the input before the run.
 
 `score_history(roll, meta)` per cutoff:
 - `w_span = n_eff / (n_eff + 8)` (SHRINK_K = 8); `shr = roll * w`
@@ -195,10 +216,16 @@ asc_044 −0.47 vs −0.51, asc_146 −0.59 vs −0.62, desc_095 0.24 vs 0.18. T
 were produced by an independent implementation of this spec; a faithful rebuild matched them to
 < 0.01 mm/yr on every bridge and cutoff.
 
+These references used the whole-period EGMS `temporal_coherence` for `n_eff`, which the
+truncation rule above now bans. They stay in `reference/` as the **whole-period baseline**: the
+leak-free rebuild reproduces them exactly when switched to the EGMS column (proving nothing else
+changed), and its own numbers are reported beside them, never tuned toward them.
+
 ### 3.6 features per asset per cutoff (what Jev sees)
 ```
 asset, cutoff, scatterers, tracks, spans,
-long_term_velocity_mm_yr (mean EGMS mean_velocity over the asset's points),
+long_term_velocity_mm_yr (mean over the asset's points of the per-point long-term velocity at
+  this cutoff, §3.5; never the EGMS mean_velocity column),
 max_span_velocity_change_mm_yr (= wmax), span_to_span_spread_mm_yr (= wspread),
 anomaly_score, score_vs_own_history_z, rank_in_city, bridges_in_city,
 city_p80_velocity_change_mm_yr, city_p80_spread_mm_yr,
@@ -415,25 +442,53 @@ bridge-ness. See docs/gotchas.md.
 - `scripts/jev_decisions.py <cutoff>` — features + flags + Jev for every bridge at a cutoff; prints
   the table; writes `out/jev_decisions_<cutoff>.csv` and `out/features_<cutoff>.csv`. Run at all
   21 cutoffs 2023-01-01 … 2024-09-01.
-- `scripts/export_web.py` — writes `web/data/bridges.geojson` (simplified polygons; id, name, n,
-  tracks, len_m), `spans.json` (`{cutoffs:[...], spans:{id:[{span, along_m, n, lat, lon, anomaly:[per cutoff]}]}}`),
-  `decisions.json` (`{site, event_date, event_asset, n_bridges, decisions:{cutoff:{id:{rank, wmax,
-  wspread, z, score, vel, flags, pattern, risk, inspect, p:{pattern,risk,inspect}}}}}`),
-  `scatterers.geojson` (points with v, t, c, id).
+- `scripts/export_web.py` — reads `out/` only (no API calls) and writes `web/data/`:
+  `bridges.geojson` (simplified polygons; id, name, n, tracks, len_m; plus the not-monitored
+  bridges with `monitored: false`, scatterers, points_per_ha and reason),
+  `spans.json` (`{cutoffs:[...], spans:{id:[{span, along_m, n, lat, lon, anomaly:[per cutoff]}]}}`),
+  `decisions.json` (`{site, event_date, event_asset, n_bridges, cutoffs:[...], decisions:{cutoff:{id:
+  {rank, score, wmax, wspread, z, vel, flags, escalations_12m, months_since_esc, radar_coverage,
+  model:{pattern, risk, inspect, p_risk, p_high, p_inspect}, rubric:{pattern, risk, inspect},
+  owner_condition_alert}}}, owner:{asset:{condition, source}}}`),
+  `scatterers.geojson` (points with v, t, c, id), `sam.geojson` (SAM box-prompt polygons with IoU
+  and bright fraction), and `memos/<cutoff>.md` for the cutoffs that have a memo. Every value for a
+  cutoff must come from data at or before that cutoff.
 - `scripts/sam_vs_osm.py` — §6.1.
 
 ## 9. Web map (web/index.html, no build step)
-MapLibre GL 4.x from unpkg. Basemaps: Esri World Imagery raster tiles (default, desaturated) and
-CARTO dark. Sources: `bridges` (promoteId `id`, fill + line coloured by **feature-state** `color`
-so the scrubber is instant), `spans` (circles, diverging blue→white→red over ±4 mm/yr), `pts`
-(scatterers, hidden by default). UI: header card with title, cutoff slider (one step per cutoff)
-and an event badge once cutoff ≥ event date; legend; right panel = ranking list (rank, name, score,
-risk pill, inspect flag) → click → detail (counts, city rank, score, wmax, wspread, z, long-term
-velocity, flag chips, Jev rows with probability bars, SVG chart of per-span anomaly vs cutoff with
-cutoff and collapse markers). Risk colours: none #4b5563, watch #eab308, elevated #f97316,
-high #ef4444, immediate #7f1d1d. Add: SAM polygons + fidelity layer, SAR amplitude toggle, and a
-"Run audit" button that streams the Spark memo from a small Modal FastAPI service.
-Deploy: `wrangler pages deploy web --project-name radartwin`.
+MapLibre GL 4.x from unpkg (pinned exact version). Basemaps: Esri World Imagery raster tiles
+(default, desaturated, with attribution) and Esri Canvas/World_Dark_Gray_Base (keyless; CARTO's
+dark tiles now need an API key). Built in two phases.
+
+**Phase 5a (core):** sources `bridges` (promoteId `id`, fill + line coloured by **feature-state**
+so the month slider is instant) and `spans` (circles, diverging blue→white→red over ±4 mm/yr).
+Header card with title, month slider (one step per cutoff, Jan 2022 – Sep 2024) and an event badge
+once the cutoff is on or after the event date. Legend. Right panel: ranking list (rank, name, score,
+model risk pill, inspect flag) → click → detail (scatterers, tracks, city rank, score, wmax,
+wspread, z, long-term velocity, escalation history, flag chips, model risk with probability bars
+and the rubric's verdict beside it, SVG chart of per-span anomaly over time). The chart shows only
+months up to the selected cutoff, with the collapse marker shown only once the cutoff reaches it,
+so the replay never shows the future. Not-monitored bridges are drawn grey and hatched or dashed,
+with "not monitored by radar" and the reason in their detail. Risk colours: none #4b5563,
+watch #eab308, elevated #f97316, high #ef4444, not monitored #9ca3af. The owner condition appears
+only in its own labelled block in the detail panel.
+
+**Phase 5b (fixes from the 5a click review):**
+- **Basemap:** the dark basemap is Esri; the footer credits Esri only.
+- **City-zoom markers:** below zoom 15, each bridge also gets a centroid marker coloured by the same feature-state, because thin polygons vanish at city zoom.
+- **Ranking order:** sorted by model risk (high, elevated, watch, none, then not monitored), then by rank.
+- **Event badge:** worded relative to the cutoff ("Carolabrücke collapsed 10 days after this cutoff").
+- **Stable layout:** the badge's space is always reserved, so the slider never changes width.
+- **Selection:** selecting a bridge brings its detail into view.
+- **Span dots:** clickable, each showing its value at the selected month.
+- **Vote labels:** model probabilities are labelled as vote shares out of 5.
+- **Scatterers:** the scatterer export carries no whole-period EGMS values.
+- **Not-monitored length:** taken from the minimum rotated rectangle and shown as approximate.
+
+**Phase 5c (layers, memo, polish):** city-zoom risk markers drawn above the span dots (5b left them underneath), SAM polygons with IoU and bright fraction, scatterer layer
+(hidden by default), Sentinel-1 amplitude toggle, memo panel for cutoffs with a memo, phone layout,
+accessibility pass. Deployment only after the owner approves the host; a live "Run audit" button
+needs a hosted service and stays out unless approved.
 
 ## 10. Event-week order (rubric-weighted)
 1. SAM 3.1 on the Dresden chip + IoU vs OSM; Muse Image 10-min test.
