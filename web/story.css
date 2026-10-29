@@ -1,88 +1,185 @@
-/* RadarTwin story mode (phase 7a): modes, captions, scrub bar, overlays. */
+/* RadarTwin story mode (phases 7a-8a): modes, captions, scrub bar, overlays. */
 
 /* ---------- Modes ---------- */
 body[data-mode="story"] #side { display: none; }
-body[data-mode="story"] #map { flex-basis: 100%; }
-body[data-mode="story"] .slider-wrap label[for="slider"],
-body[data-mode="story"] #slider { display: none; }
-body[data-mode="explore"] #scrubWrap { display: none; }
-body[data-mode="explore"] #btnExploreStory,
-body[data-mode="explore"] #btnCC { display: none; }
+body[data-mode="story"] header,
+body[data-mode="story"] footer { display: none; }
+body[data-mode="story"] main { min-height: 100vh; }
+body[data-mode="story"] #map { flex-basis: 100%; height: 100vh; min-height: 0; }
+body[data-mode="story"] .maplibregl-control-container { display: none; }
+body[data-mode="explore"] #storyBar { display: none; }
 body[data-mode="story"] #btnMemo { display: none; } /* its panel lives in the hidden side */
 body[data-mode="story"] #btnWatchStory { display: none; }
 body[data-mode="story"] #historyStrip[hidden],
 body[data-mode="explore"] #historyStrip[hidden] { display: none; }
+body[data-mode="explore"] #sceneIndex { display: none; }
 
-/* ---------- Headline card (replaces the phase-5e ticker) ---------- */
+/* ---------- Headline card: bracket frame, 24 px display line, 14 px mono reason ---------- */
 #headline {
   flex: 0 0 100%;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
+  padding: 10px 14px;
   min-height: 2.7em; /* stable while scene 4 steps months */
 }
-#headline .headline-title { font-weight: 650; display: block; }
-#headline .headline-reason { color: var(--muted); font-size: 12.5px; display: block; }
-#headline.story-hide { visibility: hidden; } /* keeps its space in Story */
+#headline .headline-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-24);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text);
+  display: block;
+}
+#headline .headline-reason {
+  font-family: var(--font-data);
+  font-size: var(--fs-14);
+  color: var(--text-dim);
+  display: block;
+  margin-top: 2px;
+}
+#headline.story-hide { visibility: hidden; } /* keeps its space (unused in story mode) */
+/* In story mode the card lives on the map, top-left under the letterbox. */
+body[data-mode="story"] #headline {
+  position: absolute;
+  top: calc(8vh + 12px);
+  left: 16px;
+  z-index: 30;
+  width: min(430px, 40%);
+  flex: none;
+}
 
-/* History strip (phase 7b): SVG grid, one row per bridge, one column
-   per month. Scrolls horizontally on narrow screens and vertically past
-   20 rows. */
+/* History strip (phase 7b, restyled 8a): no card, no scrollbar; 10 px
+   cells with 2 px gaps, 11 px mono uppercase row labels, a 1 px hairline
+   playhead. In story mode it sits along the bottom edge above the caption
+   area in scene 4, full width minus the scene index. */
 #historyStrip {
   flex: 0 0 100%;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-  background: var(--card);
-  overflow: auto;
-  max-height: 190px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  overflow: visible;
 }
-#historyStrip .history-svg { display: block; min-width: 560px; }
-#historyStrip .history-label { fill: var(--text); font-size: 11px; }
-#historyStrip .history-cell { stroke: var(--card); stroke-width: 0.5; }
-#historyStrip .history-cell.is-playhead { stroke: var(--accent); stroke-width: 1.5; }
-#historyStrip .history-playhead { fill: none; stroke: var(--accent);
-  stroke-width: 1.5; opacity: 0.8; pointer-events: none; }
+#historyStrip .history-svg {
+  display: block;
+  width: 546px; /* 150 px labels + 33 × (10 px cells + 2 px gaps): 1:1 cells */
+  max-width: 100%;
+  height: auto;
+}
+#historyStrip .history-label {
+  fill: var(--text-dim);
+  font-family: var(--font-data);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+#historyStrip .history-cell { stroke: none; }
+#historyStrip .history-playhead {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  pointer-events: none;
+}
+body[data-mode="story"] #historyStrip {
+  position: absolute;
+  left: 24px;
+  right: 170px;
+  bottom: calc(8vh + 8px);
+  z-index: 29;
+  flex: none;
+}
 
-/* ---------- Scrub bar ---------- */
-#scrubWrap { position: relative; flex: 1; min-width: 160px; padding-bottom: 12px; }
-#scrub { width: 100%; }
+/* ---------- Story bar: the scrub line along the bottom edge ----------
+   CC and EXPLORE as mono words left, the 1 px line with nine 6 px ticks
+   and a 2 px bright playhead segment centre, the month readout right.
+   The scrub line is still the range input (keyboard + aria unchanged). */
+#storyBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 8vh;
+  min-height: 56px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 24px;
+  background: transparent;
+  pointer-events: none;
+}
+#storyBar > * { pointer-events: auto; }
+#storyMonth {
+  font-family: var(--font-data);
+  font-size: var(--fs-14);
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 7em;
+  text-align: right;
+}
+#scrubWrap { position: relative; flex: 1; min-width: 160px; height: 44px; }
+#scrub {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+#scrub::-webkit-slider-runnable-track { height: 1px; background: var(--line); }
+#scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 2px;
+  height: 14px;
+  margin-top: -6.5px;
+  background: var(--line-strong);
+  border: 0;
+  border-radius: 0;
+}
+#scrub::-moz-range-track { height: 1px; background: var(--line); }
+#scrub::-moz-range-thumb {
+  width: 2px;
+  height: 14px;
+  background: var(--line-strong);
+  border: 0;
+  border-radius: 0;
+}
+#scrub:focus-visible { outline: 1px solid var(--line-strong); outline-offset: 4px; }
 #chapters {
-  position: absolute; left: 0; right: 0; top: 50%;
-  height: 0; margin-top: -18px; pointer-events: none;
+  position: absolute; left: 0; right: 0; top: 0;
+  height: 44px; pointer-events: none;
 }
 .chapter {
-  position: absolute; top: -2px;
-  width: 22px; height: 40px; margin-left: -11px;
+  position: absolute; top: 0;
+  width: 20px; height: 44px; margin-left: -10px;
   background: none; border: 0; padding: 0; cursor: pointer;
   pointer-events: auto;
 }
 .chapter-dot {
   position: absolute; left: 50%; top: 50%;
-  width: 9px; height: 9px; margin: -4px 0 0 -4px;
-  border-radius: 50%;
-  background: var(--muted);
-  border: 1px solid var(--card);
+  width: 2px; height: 6px; margin: -3px 0 0 -1px;
+  background: var(--line);
 }
-.chapter.active .chapter-dot { background: var(--accent); }
+.chapter.active .chapter-dot { background: var(--line-strong); height: 10px; margin-top: -5px; }
 .chapter::after {
   content: attr(data-label);
-  position: absolute; left: 50%; bottom: 42px;
+  position: absolute; left: 50%; bottom: 46px;
   transform: translateX(-50%);
   white-space: nowrap;
-  background: var(--card); color: var(--text);
-  border: 1px solid var(--border); border-radius: 4px;
-  padding: 2px 8px; font-size: 12px;
+  font-family: var(--font-data);
+  font-size: var(--fs-12);
+  letter-spacing: 0.08em;
+  background: var(--bg-2-glass); color: var(--text);
+  padding: 3px 10px;
   opacity: 0; pointer-events: none;
 }
 .chapter:hover::after, .chapter:focus-visible::after { opacity: 1; }
-#monthTicks { position: absolute; left: 0; right: 0; bottom: 0; height: 10px; }
+#monthTicks { position: absolute; left: 0; right: 0; bottom: 6px; height: 8px; }
 .month-tick {
-  position: absolute; bottom: 0; width: 2px; height: 7px;
-  margin-left: -1px; background: var(--muted); opacity: 0.55;
+  position: absolute; bottom: 0; width: 1px; height: 6px;
+  background: var(--line); opacity: 0.8;
 }
-.month-tick.current { background: var(--accent); opacity: 1; height: 10px; }
+.month-tick.current { background: var(--line-strong); opacity: 1; height: 8px; }
 
 /* ---------- Map overlays ---------- */
 #map { position: relative; }
@@ -90,8 +187,8 @@ body[data-mode="explore"] #historyStrip[hidden] { display: none; }
   position: absolute; inset: 0; z-index: 20;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 12px; text-align: center; padding: 24px;
-  background: radial-gradient(ellipse at center, rgba(8, 12, 18, 0.55), rgba(8, 12, 18, 0.85));
-  color: #fff;
+  background: radial-gradient(ellipse at center, rgba(7, 11, 20, 0.55), rgba(7, 11, 20, 0.85));
+  color: var(--text);
 }
 #storyLanding[hidden] { display: none; }
 /* Until the story starts the landing owns the map: never show the scene
@@ -100,8 +197,11 @@ body[data-mode="explore"] #historyStrip[hidden] { display: none; }
 #map:has(#storyLanding:not([hidden])) #sceneTag {
   display: none;
 }
-#storyLanding h2 { margin: 0; font-size: 40px; font-weight: 700; letter-spacing: 0.01em; }
-#storyLanding p { margin: 0; font-size: 16px; color: #cfd8e3; max-width: 34em; }
+#storyLanding h2 {
+  margin: 0; font-size: 40px; font-weight: 700; letter-spacing: 0.01em;
+  font-family: var(--font-display); text-transform: uppercase;
+}
+#storyLanding p { margin: 0; font-size: 16px; color: var(--text-dim); max-width: 34em; }
 #storyPlay {
   font-size: 20px; font-weight: 650;
   padding: 12px 44px; min-height: 56px; border-radius: 8px;
@@ -112,52 +212,62 @@ body[data-mode="explore"] #historyStrip[hidden] { display: none; }
   position: absolute; inset: 0; z-index: 10;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; text-align: center; pointer-events: none;
-  color: #fff; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+  color: var(--text); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
 #sceneTitle[hidden] { display: none; }
-#sceneTitle strong { font-size: 40px; font-weight: 700; }
-#sceneTitle span { font-size: 16px; color: #cfd8e3; }
+#sceneTitle strong {
+  font-family: var(--font-display); font-size: 40px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+#sceneTitle span {
+  font-family: var(--font-data); font-size: 14px; color: var(--text-dim);
+}
 #sceneCover {
   position: absolute; inset: 0; z-index: 9;
   display: flex; align-items: center; justify-content: center;
-  background: #0e141c; color: #9aa9bc; font-size: 14px;
+  background: var(--bg); color: var(--text-dim); font-size: 14px;
   padding: 0; text-align: center;
 }
 #sceneCover[hidden] { display: none; }
 #sceneCover .explainer-svg { width: 100%; height: 100%; display: block; }
 
-/* ---------- Explainer (phase 7c, scene 2) ---------- */
-.explainer-bg { fill: #0e141c; }
+/* ---------- Explainer (phase 7c, scene 2; restyled in 8b) ----------
+   Only palette tokens here so no neutral grey survives; 8b redraws it. */
+.explainer-bg { fill: var(--bg); }
 .explainer-sat { opacity: 1; }
-.explainer-body { fill: #e8eef5; stroke: #5b6b7c; stroke-width: 1; }
+.explainer-body { fill: var(--text); stroke: #5b6b7c; stroke-width: 1; }
 .explainer-panel { fill: #1d4ed8; opacity: 0.85; }
-.explainer-pulse { stroke: #22d3ee; stroke-width: 2; opacity: 0; }
-.explainer-echo { stroke: #eab308; stroke-width: 2; opacity: 0; }
-.explainer-deck { fill: #9aa9bc; }
+.explainer-pulse { stroke: #5ee7ff; stroke-width: 2; opacity: 0; }
+.explainer-echo { stroke: #f2b84b; stroke-width: 2; opacity: 0; }
+.explainer-deck { fill: var(--text-dim); }
 .explainer-pillar { fill: #5b6b7c; }
-.explainer-kerb { fill: #f97316; stroke: #fff; stroke-width: 1; }
-.explainer-label { fill: #9aa9bc; font-size: 13px; }
+.explainer-kerb { fill: #ff7a2f; stroke: #fff; stroke-width: 1; }
+.explainer-label { fill: var(--text-dim); font-size: 13px; }
 .explainer-counter {
-  fill: #fff; font-size: 34px; font-weight: 700;
+  fill: var(--text); font-size: 34px; font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .explainer-axis { stroke: #5b6b7c; stroke-width: 1; }
 .explainer-line { stroke: #7cb3ff; stroke-width: 2; }
 .explainer-dot { fill: #fdae61; stroke: #fff; stroke-width: 1.5; }
 
-/* ---------- Scene 7 memo panel (phase 7c) ---------- */
+/* ---------- Scene 7 memo panel (phase 7c, FUI glass in 8a) ---------- */
 #sceneMemo {
-  position: absolute; top: 12px; right: 12px; bottom: 64px; z-index: 13;
+  position: absolute; top: calc(8vh + 12px); right: 16px;
+  bottom: calc(8vh + 16px); z-index: 13;
   width: min(400px, 44%);
-  background: var(--card); color: var(--text);
-  border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 12px; overflow-y: auto;
+  color: var(--text);
+  padding: 12px 14px; overflow-y: auto;
 }
 #sceneMemo[hidden] { display: none; }
-#sceneMemo h3 { margin: 0 0 6px; font-size: 14px; }
+#sceneMemo > h3 {
+  margin: 0 0 6px; font-size: var(--fs-12);
+  font-family: var(--font-data); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim);
+}
 #sceneMemoBody {
-  font-size: 13px; line-height: 1.45;
-  overflow-wrap: break-word; font-family: inherit;
+  font-size: 13px; line-height: 1.55;
+  overflow-wrap: break-word; font-family: var(--font-reading);
 }
 #sceneMemoBody h2 { font-size: 14.5px; margin: 8px 0 4px; }
 #sceneMemoBody h2:first-child { margin-top: 0; }
@@ -173,14 +283,11 @@ body[data-mode="explore"] #historyStrip[hidden] { display: none; }
 #sceneMemoBody ul, #sceneMemoBody ol { padding-left: 22px; margin: 6px 0; }
 #sceneMemoBody li { margin-bottom: 2px; }
 #sceneMemoBody mark {
-  background: #fef08a; color: #1c1917; border-radius: 3px;
+  background: rgba(242, 184, 75, 0.28); color: var(--text);
   padding: 0 2px;
 }
-@media (prefers-color-scheme: dark) {
-  #sceneMemoBody mark { background: #a16207; color: #fff; }
-}
 
-/* ---------- Scene 8 proof panel (phase 7c) ---------- */
+/* ---------- Scene 8 proof panel (phase 7c, FUI glass in 8a) ---------- */
 #sceneProof {
   position: absolute; inset: 0; z-index: 14;
   display: flex; align-items: center; justify-content: center;
@@ -188,91 +295,153 @@ body[data-mode="explore"] #historyStrip[hidden] { display: none; }
 }
 #sceneProof[hidden] { display: none; }
 .proof-card {
-  background: var(--card); color: var(--text);
-  border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text);
   padding: 18px 24px; max-width: 520px; width: min(520px, 92%);
   pointer-events: auto;
 }
 .proof-cols { display: flex; gap: 24px; margin-bottom: 10px; }
 .proof-col { flex: 1; }
 .proof-col h4 {
-  margin: 0 0 6px; font-size: 13px; font-weight: 600;
-  color: var(--muted); text-transform: none;
+  margin: 0 0 6px; font-size: var(--fs-12); font-weight: 500;
+  font-family: var(--font-data); color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.12em;
 }
-.proof-val { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.proof-val {
+  display: flex; flex-direction: column; gap: 2px;
+  font-family: var(--font-data); font-size: 22px; font-weight: 500;
+  color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.1;
+}
 .proof-val .proof-k {
-  font-size: 12px; font-weight: 400; color: var(--muted);
-  display: inline-block; min-width: 3.2em;
+  font-size: var(--fs-11); font-weight: 400; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.12em;
+  display: block; line-height: 1.4;
 }
 .proof-list {
   list-style: none; margin: 8px 0; padding: 0;
   display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px;
-  font-size: 13px;
+  font-size: 13px; font-family: var(--font-data); color: var(--text-dim);
 }
 .proof-list li { display: flex; gap: 8px; align-items: baseline; }
 .proof-list .proof-check {
-  display: inline-block; min-width: 1.2em; color: #16a34a;
+  display: inline-block; min-width: 1.2em; color: var(--text);
   font-weight: 700;
 }
-.proof-foot { font-size: 14px; font-weight: 600; margin-top: 8px; }
+.proof-foot {
+  font-family: var(--font-display); font-size: 16px; font-weight: 600;
+  letter-spacing: 0.04em; color: var(--text); margin-top: 8px;
+}
 
 /* ---------- Scene 9 Europe footnote (phase 7c) ---------- */
 #sceneEuropeNote {
-  position: absolute; right: 12px; bottom: 12px; z-index: 15;
-  font-size: 11.5px; color: #cfd8e3;
-  background: rgba(10, 14, 20, 0.72);
-  padding: 3px 10px; border-radius: 4px;
+  position: absolute; right: 12px; bottom: calc(8vh + 12px); z-index: 15;
+  font-family: var(--font-data); font-size: 11.5px; color: var(--text-dim);
+  background: var(--bg-2-glass);
+  padding: 3px 10px; border-radius: 2px;
   pointer-events: none;
 }
 #sceneEuropeNote[hidden] { display: none; }
 
-/* ---------- SAM outline draw (phase 7c, scene 7) ---------- */
-.annotate-sam {
-  fill: none; stroke: #22d3ee; stroke-width: 2.5;
-}
-.annotate-sam-label {
-  fill: #fff; font-size: 12.5px; font-weight: 600;
-  paint-order: stroke; stroke: rgba(10, 14, 20, 0.85); stroke-width: 4px;
-}
+/* (SAM outline classes live in fui.css with the other FUI primitives.) */
 #sceneDim {
   position: absolute; inset: 0; z-index: 9;
-  background: rgba(8, 12, 18, 0.72); pointer-events: none;
+  background: rgba(7, 11, 20, 0.72); pointer-events: none;
 }
 #sceneDim[hidden] { display: none; }
 
-/* Captions: lower-third, 32-36 px, at most two lines. */
+/* Lower-third caption: 32 px Rajdhani on a bottom gradient with a
+   hairline above, 2-line max; fades 300 ms in, 240 ms out (120 ms
+   reduced). The mono scene index floats right-aligned above it. */
 #caption {
-  position: absolute; left: 50%; bottom: 64px; z-index: 15;
-  transform: translateX(-50%) translateY(8px);
-  max-width: min(880px, 86%);
-  max-height: 2.6em; overflow: hidden;
-  font-size: 34px; line-height: 1.25; text-align: center;
-  color: #fff; background: rgba(10, 14, 20, 0.72);
-  padding: 10px 18px; border-radius: 8px;
+  position: absolute; left: 0; right: 0; bottom: calc(8vh + 16px); z-index: 30;
+  max-height: calc(30px + 2.3em); overflow: hidden; /* padding + 2 lines */
+  font-family: var(--font-display);
+  font-size: var(--fs-32); font-weight: 500; line-height: 1.15;
+  text-align: center;
+  color: var(--text);
+  background: linear-gradient(to top, rgba(7, 11, 20, 0.85), rgba(7, 11, 20, 0));
+  border-top: 1px solid var(--line);
+  padding: 18px 15% 12px;
   opacity: 0; pointer-events: none;
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  transition: opacity 240ms ease-out;
 }
-#caption.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#caption.show { opacity: 1; transition: opacity 300ms ease-in; }
 #caption.cc-off { display: none; }
 .visually-hidden {
   position: absolute; width: 1px; height: 1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
 }
-body.story-reduced #caption { transition: opacity 0.2s ease; transform: translateX(-50%); }
-body.story-reduced #caption.show { transform: translateX(-50%); }
+body.story-reduced #caption,
+body.story-reduced #caption.show { transition: opacity 120ms ease; }
 @media (prefers-reduced-motion: reduce) {
-  #caption { transition: opacity 0.2s ease; transform: translateX(-50%); }
-  #caption.show { transform: translateX(-50%); }
+  #caption, #caption.show { transition: opacity 120ms ease; }
 }
 
-#sceneTag {
-  position: absolute; top: 12px; left: 48px; z-index: 15;
-  font-size: 12px; font-weight: 600;
-  color: #fff; background: rgba(10, 14, 20, 0.72);
-  padding: 3px 10px; border-radius: 4px;
+/* The scene tag is removed in phase 8a (the index replaces it). */
+#sceneTag { display: none; }
+
+#sceneIndex {
+  position: absolute; right: 24px; bottom: calc(8vh + 108px); z-index: 30;
+  font-family: var(--font-data);
+  font-size: var(--fs-12); font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
   pointer-events: none;
+  white-space: nowrap;
 }
-#sceneTag[hidden] { display: none; }
+#sceneIndex[hidden] { display: none; }
+
+/* ---------- Film treatment: letterbox, vignette, grain, scan, dip ----------
+   All pointer-events none; grain and scan stay off under reduced motion. */
+.letterbox {
+  position: absolute; left: 0; right: 0; height: 8%;
+  background: var(--bg); z-index: 20; pointer-events: none;
+}
+#letterTop { top: 0; }
+#letterBottom { bottom: 0; }
+body[data-mode="explore"] .letterbox { display: none; }
+#vignette {
+  position: absolute; inset: 0; z-index: 6; pointer-events: none;
+  background: radial-gradient(ellipse at center,
+    rgba(7, 11, 20, 0) 55%, rgba(7, 11, 20, 0.65) 100%);
+}
+#grain {
+  position: absolute; inset: -40px; z-index: 7; pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='2'/%3E%3C/filter%3E%3Crect%20width='160'%20height='160'%20filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: fui-grain 1s steps(4) infinite;
+}
+@keyframes fui-grain {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-12px, 6px); }
+  50% { transform: translate(8px, -10px); }
+  75% { transform: translate(-6px, -4px); }
+  100% { transform: translate(0, 0); }
+}
+body.story-reduced #grain { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  #grain { display: none; }
+}
+#scanline {
+  position: absolute; left: 0; right: 0; top: 0; height: 1px; z-index: 8;
+  background: var(--line-strong);
+  opacity: 0; pointer-events: none;
+}
+#scanline.run { animation: fui-scan 2s linear 1; }
+@keyframes fui-scan {
+  0% { top: 0; opacity: 0; }
+  5% { opacity: 0.02; }
+  95% { opacity: 0.02; }
+  100% { top: 100%; opacity: 0; }
+}
+body.story-reduced #scanline { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  #scanline { display: none; }
+}
+#sceneDip {
+  position: absolute; inset: 0; z-index: 25;
+  background: var(--bg); opacity: 0; pointer-events: none;
+}
 
 #storyCallouts {
   position: absolute; top: 12px; left: 50%; z-index: 15;
@@ -282,21 +451,23 @@ body.story-reduced #caption.show { transform: translateX(-50%); }
 }
 .story-callout {
   display: flex; align-items: center; gap: 8px;
-  font-size: 14px; font-weight: 600;
-  color: #fff; background: rgba(10, 14, 20, 0.82);
-  padding: 5px 12px; border-radius: 6px;
+  font-family: var(--font-data); font-size: 12px; font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text); background: var(--bg-2-glass);
+  padding: 5px 12px; border-radius: 2px;
 }
 .story-callout .dot { width: 11px; height: 11px; border-radius: 50%; }
-.story-callout.level-watch .dot { background: #eab308; }
-.story-callout.level-elevated .dot { background: #f97316; }
-.story-callout.level-high .dot { background: #ef4444; }
+.story-callout.level-watch .dot { background: #f2b84b; }
+.story-callout.level-elevated .dot { background: #ff7a2f; }
+.story-callout.level-high .dot { background: #ff3b3b; }
 
 #dateRoll {
   position: absolute; left: 50%; top: 38%; z-index: 15;
   transform: translate(-50%, -50%);
-  font-size: 64px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: #fff; background: rgba(10, 14, 20, 0.72);
-  padding: 8px 26px; border-radius: 10px;
+  font-family: var(--font-data);
+  font-size: 64px; font-weight: 500; font-variant-numeric: tabular-nums;
+  color: var(--text); background: rgba(7, 11, 20, 0.72);
+  padding: 8px 26px; border-radius: 2px;
   pointer-events: none; white-space: nowrap;
 }
 #dateRoll[hidden] { display: none; }
@@ -304,127 +475,110 @@ body.story-reduced #caption.show { transform: translateX(-50%); }
 #storyEnd {
   position: absolute; inset: 0; z-index: 20;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(8, 12, 18, 0.78); padding: 24px;
+  background: rgba(7, 11, 20, 0.78); padding: 24px;
 }
 #storyEnd[hidden] { display: none; }
 .story-end-card {
-  background: var(--card); color: var(--text);
-  border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text);
   padding: 26px 34px; text-align: center; max-width: 30em;
 }
-.story-end-card p { margin: 0 0 8px; font-size: 22px; font-weight: 650; }
-.story-end-card p + p { font-size: 17px; font-weight: 400; color: var(--muted); }
+.story-end-card p {
+  margin: 0 0 8px; font-size: 22px; font-weight: 600;
+  font-family: var(--font-display); letter-spacing: 0.04em;
+}
+.story-end-card p + p {
+  font-size: 14px; font-weight: 400; color: var(--text-dim);
+  font-family: var(--font-data);
+}
 .story-end-actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
-.story-end-actions button {
-  font-size: 16px; padding: 8px 26px; min-height: 44px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--panel); color: var(--text);
-  cursor: pointer;
-}
-.story-end-actions button:first-child {
-  background: var(--accent); border-color: var(--accent); color: #fff;
-}
 
 #hoverLabel {
   position: absolute; z-index: 16;
-  font-size: 12.5px; font-weight: 600; white-space: nowrap;
-  color: #fff; background: rgba(10, 14, 20, 0.85);
-  padding: 3px 9px; border-radius: 4px;
+  font-family: var(--font-data);
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+  letter-spacing: 0.06em;
+  color: var(--text); background: var(--bg-2-glass);
+  padding: 3px 9px; border-radius: 2px;
   pointer-events: none;
 }
 #hoverLabel[hidden] { display: none; }
 
-/* ---------- Annotation layer (phase 7b) ---------- */
+/* ---------- Annotation layer (phase 7b; element styles in fui.css) ---------- */
 .annotate-svg {
   position: absolute; inset: 0; z-index: 12;
   width: 100%; height: 100%;
   pointer-events: none;
 }
-.annotate-line { stroke: #fff; stroke-width: 1.8; opacity: 0.95; }
-.annotate-dot { fill: #fff; stroke: rgba(10, 14, 20, 0.8); stroke-width: 1; }
-.annotate-box { fill: rgba(10, 14, 20, 0.85); stroke: var(--border); }
-.annotate-title { fill: #fff; font-size: 12.5px; font-weight: 600; }
-.annotate-sub { fill: #cfd8e3; font-size: 12px; }
-.annotate-counter {
-  fill: #fff; font-size: 15px; font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  paint-order: stroke; stroke: rgba(10, 14, 20, 0.85); stroke-width: 4px;
-}
 
 /* ---------- Scene side view (phases 7b, scenes 5-6) ---------- */
 #sceneSideView {
-  position: absolute; top: 12px; right: 12px; z-index: 13;
+  position: absolute; top: calc(8vh + 12px); right: 16px; z-index: 13;
   width: min(340px, 42%);
-  background: var(--card); color: var(--text);
-  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text);
   padding: 10px 12px 8px;
 }
 #sceneSideView[hidden] { display: none; }
-#sceneSideView h3 { margin: 0 0 4px; font-size: 14px; }
+#sceneSideView h3 {
+  margin: 0 0 4px; font-size: var(--fs-12);
+  font-family: var(--font-data); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim);
+}
 #sceneSideSvg { width: 100%; height: auto; display: block; }
-#sceneSideView .deck-note { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
 
 /* ---------- Deck HUD (phase 7d: scenes 5-6, Explore close-up) ---------- */
 #deckHud {
   position: absolute; top: 12px; left: 48px; z-index: 14;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px; line-height: 1.45;
-  color: #fff; background: rgba(10, 14, 20, 0.82);
-  padding: 6px 10px; border-radius: 6px;
+  font-family: var(--font-data);
+  font-size: 12px; line-height: 1.4;
+  color: var(--text);
+  padding: 8px 12px;
   pointer-events: none; /* nothing new to focus */
 }
 #deckHud[hidden] { display: none; }
-#deckHud .hud-name { font-weight: 700; }
+#deckHud .hud-name { font-weight: 500; }
+#deckHud .hud-cutoff { color: var(--text-dim); }
+#deckHud .hud-rank { font-variant-numeric: tabular-nums; }
 #deckHud .hud-risk small {
-  color: #9aa9bc; font-size: 11px; margin-left: 4px;
+  color: var(--text-dim); font-size: 11px; margin-left: 4px;
 }
-/* In Story the scene tag owns the top-left corner; the HUD sits below it. */
-body[data-mode="story"] #deckHud { top: 38px; }
-.annotate-ring-1 {
-  fill: none; stroke: #fff; stroke-width: 1.2; opacity: 0.85;
-  stroke-dasharray: 9 6;
-}
-.annotate-ring-2 {
-  fill: none; stroke: #22d3ee; stroke-width: 1; opacity: 0.7;
-  stroke-dasharray: 2 7;
-}
+/* In story mode the controls are hidden, so the HUD takes the corner. */
+body[data-mode="story"] #deckHud { top: calc(8vh + 12px); left: 16px; }
 
 /* ---------- Deck blocks (detail panel + scene side view) ---------- */
 .deck-ground { stroke: var(--muted); stroke-width: 1; opacity: 0.7; }
 .deck-baseline { stroke: var(--text); stroke-width: 1.2; opacity: 0.85; }
 .deck-pillar { fill: var(--muted); opacity: 0.55; }
-.deck-block { stroke: rgba(10, 14, 20, 0.55); stroke-width: 0.8; }
+.deck-block { stroke: rgba(7, 11, 20, 0.55); stroke-width: 0.8; }
 .deck-block.is-null { stroke-dasharray: 3, 2; }
-.deck-factor { fill: var(--muted); font-size: 11px; }
+.deck-factor {
+  fill: var(--muted); font-size: 11px; font-family: var(--font-data);
+}
 body.story-reduced .annotate-line { transition: none; }
 
-#btnCC.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-
-/* ---------- Phone (<= 700 px) ---------- */
+/* ---------- Phone (<= 700 px; full phone layouts land in 8d) ---------- */
 @media (max-width: 700px) {
-  body[data-mode="story"] #map { flex-basis: auto; height: calc(100vh - 220px); min-height: 300px; }
+  body[data-mode="story"] #map { flex-basis: auto; height: 100vh; min-height: 300px; }
   #caption {
-    font-size: 22px; bottom: 12px; max-width: 94%;
-    padding: 8px 12px;
+    font-size: 22px; bottom: calc(8vh + 12px);
+    padding: 12px 8% 10px;
   }
+  #sceneIndex { right: 12px; bottom: calc(8vh + 92px); }
+  #storyBar { padding: 0 12px; gap: 12px; }
+  #scrubWrap { min-width: 0; }
+  .chapter { width: 18px; margin-left: -9px; }
+  #btnCC, #btnExploreStory { min-height: 40px; }
+  #btnWatchStory { min-height: 40px; }
+  body[data-mode="story"] #headline {
+    left: 8px; right: 8px; width: auto;
+  }
+  body[data-mode="story"] #historyStrip { left: 8px; right: 8px; }
   #storyLanding h2, #sceneTitle strong { font-size: 28px; }
   #storyLanding p, #sceneTitle span { font-size: 14px; }
   #dateRoll { font-size: 40px; top: 34%; }
   .story-end-card { padding: 20px; }
   .story-end-card p { font-size: 19px; }
-  #scrubWrap { flex: 1 1 100%; min-width: 0; }
-  #scrub { min-height: 40px; }
-  #scrub::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 28px; height: 40px; border-radius: 6px;
-    background: var(--accent);
-  }
-  #scrub::-moz-range-thumb {
-    width: 28px; height: 40px; border-radius: 6px; background: var(--accent);
-    border: 1px solid var(--border);
-  }
-  .chapter { width: 18px; margin-left: -9px; height: 40px; }
-  #btnCC, #btnExploreStory, #btnWatchStory { min-height: 40px; }
   #sceneSideView {
-    top: auto; bottom: 52px; right: 8px; left: 8px; width: auto;
+    top: auto; bottom: calc(8vh + 8px); right: 8px; left: 8px; width: auto;
   }
   /* Phone close-up: no 3D deck, rings off (JS), the HUD collapses to
      two lines (name + risk) pinned above the map. */
@@ -432,14 +586,13 @@ body.story-reduced .annotate-line { transition: none; }
     top: 8px; left: 8px; right: 8px;
     font-size: 12px;
   }
-  body[data-mode="story"] #deckHud { top: 8px; }
+  body[data-mode="story"] #deckHud { top: calc(8vh + 8px); }
   #deckHud .hud-cutoff, #deckHud .hud-rank { display: none; }
-  #historyStrip { max-height: 150px; }
   .annotate-title { font-size: 11.5px; }
   .annotate-sub { font-size: 11px; }
   .annotate-counter { font-size: 13px; }
   #sceneMemo {
-    top: auto; bottom: 52px; right: 8px; left: 8px; width: auto;
+    top: auto; bottom: calc(8vh + 8px); right: 8px; left: 8px; width: auto;
     max-height: 44%;
   }
   .proof-card { padding: 14px 16px; }

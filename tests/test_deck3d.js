@@ -37,8 +37,8 @@ const MIDX = 1; // [1.0, -2.0, null]
 // --- span colours (same stops as annotate.js spanColor) ---
 check("span -2 is blue-grey", deckSpanColor(-2) === "#abd9e9");
 check("span +2 is orange", deckSpanColor(2) === "#fdae61");
-check("span 0 is light", deckSpanColor(0) === "#f5f5f5");
-check("span null is grey", deckSpanColor(null) === "#9ca3af");
+check("span 0 is warmed white", deckSpanColor(0) === "#f3f0ea");
+check("span null is dim blue-grey", deckSpanColor(null) === "#8ea3c7");
 check("span clamps beyond range", deckSpanColor(10) === deckSpanColor(4) &&
   deckSpanColor(-10) === deckSpanColor(-4));
 check("planted: swapped span colours are caught",
@@ -76,9 +76,9 @@ check("largest anomaly maps to the fixed height",
 check("heights follow the bound month (10 m per mm/yr)",
   Math.abs(spec.boxes[0].y - 10) < 1e-9 &&
   Math.abs(spec.boxes[1].y + 20) < 1e-9);
-check("null span is grey and flat at the baseline",
+check("null span is dim blue-grey and flat at the baseline",
   spec.boxes[2].isNull === true && spec.boxes[2].y === 0 &&
-  spec.boxes[2].color === "#9ca3af");
+  spec.boxes[2].color === "#8ea3c7");
 check("planted: flat deck with non-zero anomalies is caught",
   spec.boxes.some((b) => b.y !== 0));
 check("span colours follow the span scale",
@@ -88,7 +88,7 @@ check("planted: colour mismatch is caught",
   spec.boxes[0].color !== "#b2182b" &&
   spec.boxes[1].color !== deckSpanColor(1.0));
 check("high bridge gets the red glow emissive",
-  spec.boxes.every((b) => b.emissive === "#ef4444") &&
+  spec.boxes.every((b) => b.emissive === "#ff3b3b") &&
   spec.boxes.every((b) => b.emissiveIntensity === 0.55));
 check("quiet bridge gets no emissive",
   deckMeshSpec(SPANS, MIDX, LEN, 5, { risk: "watch" }).boxes

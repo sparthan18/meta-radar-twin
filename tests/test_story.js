@@ -11,7 +11,7 @@ const {
   firstLevelHits, buildScenes, sceneBounds, totalDuration,
   sceneIndexAtTime, scene4Allowed, captionDataFor,
   captionIndexAtLocalTime, captionAtTime, storyOrbitBearing,
-  stepCameraPatch,
+  stepCameraPatch, storyEaseOut,
   memoTypedChars, memoHighlightRange, revealedCount, renderedTextLength,
   revealNodes, renderedHighlightRange, proofCountValue, proofChecksShown,
   europeLitCount
@@ -549,6 +549,21 @@ check("7d-fix step patch carries the Carolabrücke centroid",
   stepPatch.zoom === 15.7 && stepPatch.pitch === 65 && stepPatch.bearing === 0);
 check("planted: centre-less step patch is caught",
   stepPatch.center !== undefined);
+
+// --- phase 8a: the FUI ease-out curve for camera moves ---
+check("ease-out endpoints are exact",
+  storyEaseOut(0) === 0 && storyEaseOut(1) === 1);
+let easeMono = true;
+for (let k = 1; k <= 20; k++) {
+  if (!(storyEaseOut(k / 20) >= storyEaseOut((k - 1) / 20))) easeMono = false;
+}
+check("ease-out is monotone on [0, 1]", easeMono);
+check("ease-out front-loads progress (f(0.5) > 0.5)",
+  storyEaseOut(0.5) > 0.5);
+check("ease-out clamps outside [0, 1]",
+  storyEaseOut(-1) === 0 && storyEaseOut(2) === 1);
+check("planted: linear easing is caught",
+  Math.abs(storyEaseOut(0.25) - 0.25) > 0.05);
 
 if (failures) {
   console.log(`test_story: FAIL (${failures} failure(s))`);

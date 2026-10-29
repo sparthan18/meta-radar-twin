@@ -158,11 +158,12 @@ function exploreCalloutsFor(table, id2name, centroids) {
   return list;
 }
 
-// Span scale (±4 mm/yr, same stops as the map's span dots).
+// Span scale (±4 mm/yr, same stops as the map's span dots; the zero is
+// warmed to #f3f0ea and nulls carry the blue bias, per the FUI palette).
 function spanColor(v) {
-  if (v === null || v === undefined || Number.isNaN(Number(v))) return "#9ca3af";
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return "#8ea3c7";
   const stops = [
-    [-4, [33, 102, 172]], [-2, [171, 217, 233]], [0, [245, 245, 245]],
+    [-4, [33, 102, 172]], [-2, [171, 217, 233]], [0, [243, 240, 234]],
     [2, [253, 174, 97]], [4, [178, 24, 43]]
   ];
   const x = Math.max(-4, Math.min(4, Number(v)));
@@ -174,15 +175,15 @@ function spanColor(v) {
       return "#" + c.map((v2) => v2.toString(16).padStart(2, "0")).join("");
     }
   }
-  return "#f5f5f5";
+  return "#f3f0ea";
 }
 
 function riskColor(risk) {
-  if (risk === "high") return "#ef4444";
-  if (risk === "elevated") return "#f97316";
-  if (risk === "watch") return "#eab308";
-  if (risk === "none") return "#4b5563";
-  return "#9ca3af";
+  if (risk === "high") return "#ff3b3b";
+  if (risk === "elevated") return "#ff7a2f";
+  if (risk === "watch") return "#f2b84b";
+  if (risk === "none") return "#3b4760";
+  return "#8ea3c7";
 }
 
 // Fastest span at a cutoff: largest absolute anomaly, lower span id wins
@@ -240,7 +241,7 @@ function deckGeometry(spans, cutoffIdx, lenM, opts) {
     return {
       span: s.span, x, w: blockW, h: blockH,
       dy: isNull ? 0 : -value * pxPerUnit,
-      value, color: isNull ? "#9ca3af" : spanColor(value),
+      value, color: isNull ? "#8ea3c7" : spanColor(value),
       isNull, along_m: s.along_m
     };
   });
@@ -264,6 +265,7 @@ let annotateDrawn = {};
 let annotateLastView = "";
 let annotateSam = null; // {ring: [[lon,lat]...], label: string} or null
 let annotateSamDrawn = false;
+let annotateReticles = []; // [{lon, lat}] high-marker reticles (phase 8a)
 let annotateRings = null; // {lon, lat, radii:[m...]} or null (phase 7d HUD)
 let annotateRingAngles = [0, 0];
 let annotateRingCenter = null; // {x, y} of the last ring draw
@@ -325,7 +327,7 @@ function annotateProject(lon, lat) {
 // motion everything appears drawn.
 function annotateDrawOne(co, pt, mapW, mapH, isNew, placed) {
   const g = annotateSvgEl("g", { "class": "annotate-callout", "data-id": co.id });
-  const labelW = co.w || 148;
+  const labelW = co.w || 168;
   const labelH = co.sub ? 40 : 26;
   const pos = placeLabel(pt, labelW, labelH, mapW, mapH, { placed: placed || [] });
   if (Array.isArray(placed)) placed.push({ x: pos.x, y: pos.y, w: labelW, h: labelH });
@@ -347,14 +349,25 @@ function annotateDrawOne(co, pt, mapW, mapH, isNew, placed) {
   }
   g.appendChild(line);
   const dot = annotateSvgEl("circle", {
-    cx: String(pt.x), cy: String(pt.y), r: "3.5", "class": "annotate-dot"
+    cx: String(pt.x), cy: String(pt.y), r: "3", "class": "annotate-dot"
   });
   g.appendChild(dot);
   const rect = annotateSvgEl("rect", {
     x: String(pos.x), y: String(pos.y), width: String(labelW),
-    height: String(labelH), rx: "5", "class": "annotate-box"
+    height: String(labelH), rx: "2", "class": "annotate-box"
   });
   g.appendChild(rect);
+  // Bracketed label: four 8 px corner ticks over the glass box.
+  const cs = 8;
+  const corners = [
+    `M ${pos.x} ${pos.y + cs} L ${pos.x} ${pos.y} L ${pos.x + cs} ${pos.y}`,
+    `M ${pos.x + labelW - cs} ${pos.y} L ${pos.x + labelW} ${pos.y} L ${pos.x + labelW} ${pos.y + cs}`,
+    `M ${pos.x + labelW} ${pos.y + labelH - cs} L ${pos.x + labelW} ${pos.y + labelH} L ${pos.x + labelW - cs} ${pos.y + labelH}`,
+    `M ${pos.x + cs} ${pos.y + labelH} L ${pos.x} ${pos.y + labelH} L ${pos.x} ${pos.y + labelH - cs}`
+  ];
+  for (const d of corners) {
+    g.appendChild(annotateSvgEl("path", { d, "class": "annotate-corner" }));
+  }
   const t1 = annotateSvgEl("text", {
     x: String(pos.x + 8), y: String(pos.y + (co.sub ? 17 : 18)),
     "class": "annotate-title"
@@ -434,6 +447,35 @@ function AnnotateUpdate() {
   if (annotateRings) {
     try { annotateDrawRings(w, h); } catch (e) { /* ignore */ }
   }
+  if (annotateReticles.length) {
+    try { annotateDrawReticles(w, h); } catch (e) { /* ignore */ }
+  }
+}
+
+// Phase 8a high-marker reticles: a dashed ring (r 11 px) about each high
+// bridge's centroid, rotating via the .reticle-spin CSS animation at 6°/s
+// (still under reduced motion). Reprojected with everything else, so the
+// rings track pan, zoom, pitch and bearing.
+function annotateDrawReticles(mapW, mapH) {
+  for (const r of annotateReticles) {
+    const c = annotateProject(r.lon, r.lat);
+    if (!c) continue;
+    if (c.x < -30 || c.y < -30 || c.x > mapW + 30 || c.y > mapH + 30) continue;
+    annotateSvg.appendChild(annotateSvgEl("circle", {
+      cx: c.x.toFixed(1), cy: c.y.toFixed(1), r: "11",
+      "class": "reticle-spin"
+    }));
+  }
+}
+
+// Replace the high-marker reticle list (each: {lon, lat}). Data-driven
+// like the markers themselves, so AnnotateClear leaves it alone: the
+// dashboard re-sets it from the bound cutoff on every month change.
+function AnnotateSetReticles(list) {
+  annotateReticles = (list || []).slice();
+  annotateSeq++;
+  annotateLastView = "";
+  AnnotateUpdate();
 }
 
 // Phase 7d HUD rings: two thin circles about the bridge centroid at fixed
@@ -476,15 +518,15 @@ function annotateDrawRings(mapW, mapH) {
   }
 }
 
-// Slow counter-rotation (about 8°/s and −6°/s). Updates the drawn groups'
-// transforms in place, so idle rotation never triggers a full redraw;
-// the next AnnotateUpdate (pan, zoom, tilt) redraws at the new centre
-// with the current angles. Never started under reduced motion.
+// Slow counter-rotation (6°/s and −6°/s, the reticle rate). Updates the
+// drawn groups' transforms in place, so idle rotation never triggers a
+// full redraw; the next AnnotateUpdate (pan, zoom, tilt) redraws at the
+// new centre with the current angles. Never started under reduced motion.
 function annotateTickRings(dtMs) {
   if (!annotateRings || !annotateSvg) return;
   if (annotateReduced()) return;
   const dt = (Number(dtMs) > 0) ? Number(dtMs) : 50;
-  annotateRingAngles[0] = (annotateRingAngles[0] + 8 * dt / 1000) % 360;
+  annotateRingAngles[0] = (annotateRingAngles[0] + 6 * dt / 1000) % 360;
   annotateRingAngles[1] = (annotateRingAngles[1] - 6 * dt / 1000) % 360;
   const cc = annotateRingCenter;
   if (!cc) return;
@@ -750,16 +792,83 @@ function AnnotateSetHud(data) {
   }
   const escHud = (s) => String(s).replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const firstShow = (() => {
+    try { return box.hasAttribute("hidden"); } catch (e) { return false; }
+  })();
+  // Rank/z as countable spans (aria-hidden while counting; the final
+  // text sits in a visually-hidden span so live regions announce once).
+  const numSpan = (v, dec) => {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return "—";
+    const n = Number(v);
+    return `<span data-fui-count="${n}" data-fui-dec="${dec}" ` +
+      `aria-hidden="true">${n.toFixed(dec)}</span>`;
+  };
+  const rTxt = (d.rank === null || d.rank === undefined) ? "—" : String(d.rank);
+  const nTxt = (d.n === null || d.n === undefined) ? "—" : String(d.n);
+  const zTxt = (d.z === null || d.z === undefined || Number.isNaN(Number(d.z)))
+    ? "—" : Number(d.z).toFixed(2);
   try {
     const L = lines.lines || [];
     box.innerHTML =
       `<div class="hud-name">${escHud(L[0] || "")}</div>` +
       `<div class="hud-cutoff">${escHud(L[1] || "")}</div>` +
-      `<div class="hud-rank">${escHud(L[2] || "")}</div>` +
+      `<div class="hud-rank">rank ${numSpan(d.rank, 0)} of ${escHud(nTxt)} ` +
+      `· z ${numSpan(d.z, 2)}` +
+      `<span class="visually-hidden">rank ${escHud(rTxt)} of ` +
+      `${escHud(nTxt)}, z ${escHud(zTxt)}</span></div>` +
       `<div class="hud-risk">${escHud(L[3] || "")} ` +
       `<small>${escHud(lines.tech || "")}</small></div>`;
     box.removeAttribute("hidden");
   } catch (e) { /* ignore */ }
+  // First appearance counts the numbers up over 600 ms (linear); later
+  // month changes and reduced motion show final values.
+  if (firstShow && !annotateReduced()) {
+    try {
+      const spans = box.querySelectorAll("[data-fui-count]");
+      for (const sp of Array.from(spans || [])) {
+        fuiCountUp(sp, Number(sp.getAttribute("data-fui-count")),
+          Number(sp.getAttribute("data-fui-dec")) || 0);
+      }
+    } catch (e) { /* final values are already drawn */ }
+  }
+}
+
+// FUI readout count-up: el counts from 0 to `to` over 600 ms, linear,
+// formatted to `dec` decimals. Reduced motion and missing rAF leave the
+// final value (callers draw it before calling).
+function fuiCountUp(el, to, dec) {
+  if (!el) return;
+  const target = Number(to);
+  const places = Number(dec) || 0;
+  if (!Number.isFinite(target)) return;
+  const reduced = annotateReduced();
+  let raf = null;
+  try {
+    raf = (typeof requestAnimationFrame !== "undefined")
+      ? requestAnimationFrame : null;
+  } catch (e) { raf = null; }
+  if (reduced || !raf) {
+    try { el.textContent = target.toFixed(places); } catch (e) { /* ignore */ }
+    return;
+  }
+  const DUR = 600;
+  let t0 = null;
+  const step = (now) => {
+    try {
+      if (t0 === null) t0 = Number(now) || 0;
+      const frac = Math.max(0, Math.min(1,
+        ((Number(now) || 0) - t0) / DUR));
+      el.textContent = (target * frac).toFixed(places);
+      if (frac < 1) raf(step);
+      else el.textContent = target.toFixed(places);
+    } catch (e) { /* a dropped count keeps its last frame */ }
+  };
+  try {
+    el.textContent = (0).toFixed(places);
+    raf(step);
+  } catch (e) {
+    try { el.textContent = target.toFixed(places); } catch (e2) { /* ignore */ }
+  }
 }
 
 function AnnotateClearHud() {

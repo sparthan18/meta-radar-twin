@@ -373,6 +373,30 @@ function captionAtTime(scenes, t) {
   return { scene: i, caption: captionIndexAtLocalTime(caps, localT) };
 }
 
+// The FUI ease-out curve (phase 8a): cubic-bezier(0.22, 1, 0.36, 1) as a
+// function of linear time, for the director's MapLibre camera moves (which
+// take an easing function, not a CSS curve). Newton solve on x, 5
+// iterations; endpoints exact, monotone on [0, 1].
+function storyEaseOut(t) {
+  const x = Math.max(0, Math.min(1, Number(t) || 0));
+  if (x === 0 || x === 1) return x;
+  const x1 = 0.22, y1 = 1, x2 = 0.36, y2 = 1;
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = (u) => ((ax * u + bx) * u + cx) * u;
+  const sy = (u) => ((ay * u + by) * u + cy) * u;
+  const dx = (u) => (3 * ax * u + 2 * bx) * u + cx;
+  let u = x;
+  for (let i = 0; i < 5; i++) {
+    const err = sx(u) - x;
+    if (Math.abs(err) < 1e-4) break;
+    const d = dx(u);
+    if (Math.abs(d) < 1e-4) break;
+    u = Math.max(0, Math.min(1, u - err / d));
+  }
+  return Math.max(0, Math.min(1, sy(u)));
+}
+
 // Linear camera orbit: totalDeg over spanSec from the scene start,
 // holding the end value afterwards. Scene 6 runs 20 deg over
 // STORY_SCENE6_ORBIT (6 s): 10 deg at 3 s, 20 deg from 6 s on.
@@ -886,7 +910,8 @@ function storyApplyCamera(sc, cut) {
     const reduced = storyReduced();
     if (c.mode === "hold") {
       if (c.pushIn && !cut && !reduced) {
-        map.easeTo({ zoom: map.getZoom() + c.pushIn, duration: 2000 });
+        map.easeTo({ zoom: map.getZoom() + c.pushIn, duration: 2000,
+          easing: storyEaseOut });
       }
       return;
     }
@@ -945,11 +970,14 @@ function storyApplyCamera(sc, cut) {
     if (cut || reduced || playheadDriven) {
       map.jumpTo({ center, zoom, pitch, bearing: 0 });
     } else if (c.mode === "bridge" || c.mode === "pullback") {
-      map.flyTo({ center, zoom, pitch, bearing: 0, duration: 2000 });
+      map.easeTo({ center, zoom, pitch, bearing: 0, duration: 2000,
+        easing: storyEaseOut });
     } else if (sc && sc.id === "twenty-bridges") {
-      map.easeTo({ center, zoom, pitch, bearing: 0, duration: 2000 });
+      map.easeTo({ center, zoom, pitch, bearing: 0, duration: 2000,
+        easing: storyEaseOut });
     } else {
-      map.easeTo({ center, zoom, pitch, bearing: 0, duration: 1800 });
+      map.easeTo({ center, zoom, pitch, bearing: 0, duration: 1800,
+        easing: storyEaseOut });
     }
   } catch (e) { /* map not ready; the dashboard still binds */ }
 }
@@ -1021,6 +1049,7 @@ function storyShowSideView(monthIdx) {
   } catch (e) { /* panel still shows */ }
   const wasHidden = panel.hasAttribute("hidden");
   storyShow(panel, true);
+  // No storyXfade here: the slide-in below is already a 600 ms reveal.
   if (wasHidden && !storyReduced() && storyHasGsap()) {
     try {
       gsap.from(panel, { x: "100%", opacity: 0, duration: 0.6, ease: "power2.out" });
@@ -1195,6 +1224,7 @@ function storyShowMemoPanel(cutoff) {
   if (title) title.textContent = `Inspection memo — ${cutoff}`;
   body.textContent = "Loading the memo…";
   storyShow(panel, true);
+  storyXfade(panel);
 }
 
 function storyHideMemoPanel() {
@@ -1499,6 +1529,7 @@ function storyShowProof() {
     foot.textContent = "";
   }
   storyShow(panel, true);
+  storyXfade(panel);
 }
 
 function storyHideProof() {
@@ -1605,7 +1636,7 @@ function storySyncEurope(localT, duration) {
           } else {
             map.easeTo({ center: STORY_EUROPE_CENTER.slice(),
               zoom: STORY_EUROPE_ZOOM, pitch: 0, bearing: 0,
-              duration: 2000 });
+              duration: 2000, easing: storyEaseOut });
           }
         } else {
           map.jumpTo({ center: [13.745, 51.057], zoom: 12, pitch: 40,
@@ -1660,14 +1691,14 @@ function storyGlowPulseOnce(key) {
       yoyo: true, repeat: 1,
       onUpdate: () => {
         try {
-          map.setPaintProperty("bridges-glow", "circle-radius", 18 + 10 * state.t);
+          map.setPaintProperty("bridges-glow", "circle-radius", 28 + 12 * state.t);
           map.setPaintProperty("bridges-glow", "circle-opacity",
             ["case", ["==", ["feature-state", "risk"], "high"], 0.25 + 0.35 * state.t, 0]);
         } catch (e) { /* ignore */ }
       },
       onComplete: () => {
         try {
-          map.setPaintProperty("bridges-glow", "circle-radius", 18);
+          map.setPaintProperty("bridges-glow", "circle-radius", 28);
           map.setPaintProperty("bridges-glow", "circle-opacity",
             ["case", ["==", ["feature-state", "risk"], "high"], 0.25, 0]);
         } catch (e) { /* ignore */ }
@@ -1682,6 +1713,49 @@ function storyShow(el, on) {
   else el.setAttribute("hidden", "");
 }
 
+// Phase 8a transitions. storyXfade crossfades a shown overlay over 600 ms
+// (120 ms under reduced motion). storyDipOnEnter dips the map to --bg and
+// back (500 ms each way) when scenes 2 and 8 start; never while scrubbing
+// or under reduced motion. storyScan restarts the 2 s scan-line sweep on
+// every scene start; never under reduced motion.
+function storyXfade(el) {
+  if (!el) return;
+  try {
+    if (el.hasAttribute("hidden")) return;
+  } catch (e) { return; }
+  if (!storyHasGsap()) return;
+  try {
+    gsap.fromTo(el, { opacity: 0 },
+      { opacity: 1, duration: storyReduced() ? 0.12 : 0.6,
+        ease: "power1.out" });
+  } catch (e) { /* the overlay is already shown */ }
+}
+
+function storyDipOnEnter(sc) {
+  if (!sc || (sc.id !== "how-radar-sees" && sc.id !== "the-proof")) return;
+  if (storyScrubbing || storyReduced() || !storyHasGsap()) return;
+  const dip = storyEl("sceneDip");
+  if (!dip) return;
+  try {
+    gsap.timeline()
+      .to(dip, { opacity: 1, duration: 0.5, ease: "power1.in" })
+      .to(dip, { opacity: 0, duration: 0.5, ease: "power1.out" });
+  } catch (e) {
+    try { dip.style.opacity = "0"; } catch (e2) { /* ignore */ }
+  }
+}
+
+function storyScan() {
+  if (storyReduced()) return;
+  const el = storyEl("scanline");
+  if (!el) return;
+  try {
+    el.classList.remove("run");
+    void el.offsetWidth;
+    el.classList.add("run");
+  } catch (e) { /* ignore */ }
+}
+
 function storyHasStarted() {
   try {
     const landing = storyEl("storyLanding");
@@ -1693,15 +1767,15 @@ function storyHasStarted() {
 function storyApplyOverlays(i) {
   const sc = storyScenes[i];
   if (!sc) return;
-  // The tag text always reflects the scene; visibility is owned per-update
-  // by storySyncSceneTag so seeks and natural transitions agree. The title
-  // shows only after the story starts (landing hidden).
+  // The scene tag is removed in phase 8a (the "04 / 09" index replaces
+  // it); its text still updates for continuity but it never shows.
   const tag = storyEl("sceneTag");
   if (tag) {
     tag.textContent = `scene ${i + 1} of 9`;
-    storyShow(tag, storyHasStarted());
+    storyShow(tag, false);
   }
   storyShow(storyEl("sceneTitle"), sc.overlay === "title" && storyHasStarted());
+  storyXfade(storyEl("sceneTitle"));
   storyShow(storyEl("sceneCover"), !!(sc.layers && sc.layers.cover));
   storyShow(storyEl("sceneDim"), !!(sc.layers && sc.layers.dim));
   // 7c overlays: explainer owns the cover, the memo panel the side area,
@@ -1719,6 +1793,7 @@ function storyApplyOverlays(i) {
   else storyHideProof();
   if (sc.id !== "ten-days-later") storyRemoveEurope();
   storyShow(storyEl("historyStrip"), sc.id === "three-years");
+  storyXfade(storyEl("historyStrip"));
   if (sc.id === "august" || sc.id === "september") {
     try {
       storyShowSideView(storyCutoffIndexOf(sc.cutoff));
@@ -1728,15 +1803,18 @@ function storyApplyOverlays(i) {
   }
   const headline = storyEl("headline");
   if (headline) {
-    // The headline card belongs to Explore and to scene 4; during the
-    // other story scenes it hides but keeps its space (no header jump).
-    headline.classList.toggle("story-hide", sc.id !== "three-years");
+    // The headline card belongs to Explore and to scene 4; in story mode
+    // it lives on the map (storyPlaceCards) and shows only in scene 4.
+    headline.classList.remove("story-hide");
+    storyShow(headline, sc.id === "three-years");
+    storyXfade(headline);
   }
   if (sc.id !== "ten-days-later") {
     storyShow(storyEl("storyEnd"), false);
     storyShow(storyEl("dateRoll"), false);
   } else {
     storyShow(storyEl("dateRoll"), true);
+    storyXfade(storyEl("dateRoll"));
   }
   // Scene 9 carries the phase-5e collapse moment: Carolabrücke selected
   // with the Radar and SAM layers on (the layers come from storyApplyLayers).
@@ -1759,6 +1837,8 @@ function storyApplySceneState(i) {
   const instant = storyScrubbing || storyReduced() || !storyMaster || !storyMaster.isActive();
   storyClearCallouts();
   storyHideCaption();
+  storyScan();
+  storyDipOnEnter(sc);
   storyApplyLayers(sc);
   storyApplyOverlays(i);
   if (sc.id !== "three-years") {
@@ -2045,6 +2125,7 @@ function storySyncEnding(show) {
     if (l2) l2.textContent = "The data flagged it first.";
   }
   storyShow(end, show);
+  if (show) storyXfade(end);
 }
 
 // Camera as a function of the playhead: scene 1 orbits at 0.5 deg/s
@@ -2076,24 +2157,32 @@ function storySyncCamera(i, localT) {
   } catch (e) { /* map not ready */ }
 }
 
-// The scene tag (and the scene-1 title block) as a function of the
+// The scene index (and the scene-1 title block) as a function of the
 // playhead: the same sceneIndexAtTime lookup the scrub bar uses, on every
 // master update, so seeks, steps, chapter clicks and natural transitions
-// agree. Hidden until the story starts and in Explore mode.
+// agree. Hidden until the story starts and in Explore mode. The old scene
+// tag never shows (phase 8a removed it).
 function storySyncSceneTag(t) {
   try {
     const tag = storyEl("sceneTag");
     const title = storyEl("sceneTitle");
+    const index = storyEl("sceneIndex");
     if (!storyScenes.length) return;
     if (storyMode() !== "story" || !storyHasStarted()) {
       if (tag) storyShow(tag, false);
       if (title) storyShow(title, false);
+      if (index) storyShow(index, false);
       return;
     }
     const idx = sceneIndexAtTime(storyScenes, t);
     if (tag) {
       tag.textContent = `scene ${idx + 1} of 9`;
-      storyShow(tag, true);
+      storyShow(tag, false);
+    }
+    if (index) {
+      index.textContent =
+        `${String(idx + 1).padStart(2, "0")} / ${String(storyScenes.length).padStart(2, "0")}`;
+      storyShow(index, true);
     }
     if (title) {
       const sc = storyScenes[idx];
@@ -2397,6 +2486,36 @@ function storyTogglePlay() {
   else storyPlay();
 }
 
+// Phase 8a: the headline card and the history strip live in the header
+// in Explore and on the map in story mode (the header is hidden there).
+// Home positions are captured on the first call; moves keep the nodes
+// (and their listeners), so the dashboard update paths are untouched.
+let storyCardHome = null;
+
+function storyPlaceCards(toStory) {
+  try {
+    const head = storyEl("headline");
+    const strip = storyEl("historyStrip");
+    const mapHost = storyEl("map");
+    if (!head || !strip || !mapHost) return;
+    if (!storyCardHome) {
+      storyCardHome = { hp: head.parentNode, hn: head.nextSibling,
+        sp: strip.parentNode, sn: strip.nextSibling };
+    }
+    if (toStory) {
+      mapHost.appendChild(head);
+      mapHost.appendChild(strip);
+    } else {
+      if (storyCardHome.hp) {
+        storyCardHome.hp.insertBefore(head, storyCardHome.hn);
+      }
+      if (storyCardHome.sp) {
+        storyCardHome.sp.insertBefore(strip, storyCardHome.sn);
+      }
+    }
+  } catch (e) { /* cards stay where they are */ }
+}
+
 function storyHideOverlays() {
   storyHideCaption();
   storyClearCallouts();
@@ -2406,6 +2525,7 @@ function storyHideOverlays() {
   // when the story never started.
   storyHideLanding();
   storyShow(storyEl("sceneTag"), false);
+  storyShow(storyEl("sceneIndex"), false);
   storyShow(storyEl("sceneTitle"), false);
   storyShow(storyEl("sceneCover"), false);
   storyShow(storyEl("sceneDim"), false);
@@ -2423,7 +2543,10 @@ function storyHideOverlays() {
   // Hide here; the Explore path re-renders it full via applyCutoff.
   storyShow(storyEl("historyStrip"), false);
   const headline = storyEl("headline");
-  if (headline) headline.classList.remove("story-hide");
+  if (headline) {
+    headline.classList.remove("story-hide");
+    storyShow(headline, true);
+  }
 }
 
 // Re-apply the current playhead's state (used when returning to Story).
@@ -2448,6 +2571,7 @@ function storySetMode(mode) {
   try { document.body.dataset.mode = mode; } catch (e) { return; }
   if (mode === "explore") {
     if (storyState === "playing") storyPause();
+    storyPlaceCards(false);
     storyHideOverlays();
     try {
       if (typeof map !== "undefined" && map) {
@@ -2462,6 +2586,7 @@ function storySetMode(mode) {
   } else {
     try { if (typeof setPlaying === "function") setPlaying(false); } catch (e) { /* ignore */ }
     try { if (typeof map !== "undefined" && map) map.resize(); } catch (e) { /* ignore */ }
+    storyPlaceCards(true);
     storyResync();
     storyUpdatePlayButton();
   }
@@ -2531,8 +2656,10 @@ function storyWireHover() {
     const hide = () => storyShow(storyEl("hoverLabel"), false);
     map.on("mousemove", "bridges-fill", show);
     map.on("mousemove", "bridges-markers", show);
+    map.on("mousemove", "bridges-markers-hit", show);
     map.on("mouseleave", "bridges-fill", hide);
     map.on("mouseleave", "bridges-markers", hide);
+    map.on("mouseleave", "bridges-markers-hit", hide);
     map.on("dragstart", hide);
   } catch (e) { /* hover labels are a nicety, never fatal */ }
 }
@@ -2619,9 +2746,10 @@ function storyInit() {
   storyWireEvents();
   storyBuildMaster();
   // Landing backdrop: scene 1's state behind the title and Play button,
-  // but the scene-1 title block and tag stay hidden until Play.
+  // but the scene-1 title block and index stay hidden until Play.
   storyScene = 0;
   storyMonth = -1;
+  storyPlaceCards(true);
   storyApplySceneState(0);
   storySyncProgress(0, 0);
   storySyncCaption(0);
@@ -2669,7 +2797,7 @@ if (typeof module !== "undefined" && module.exports) {
     firstLevelHits, buildScenes, sceneBounds,
     totalDuration, sceneIndexAtTime, scene4Allowed, captionDataFor,
     captionIndexAtLocalTime, captionAtTime, storyOrbitBearing,
-    stepCameraPatch,
+    stepCameraPatch, storyEaseOut,
     memoTypedChars, memoHighlightRange, revealedCount, renderedTextLength,
     revealNodes, renderedHighlightRange, proofCountValue, proofChecksShown,
     europeLitCount,

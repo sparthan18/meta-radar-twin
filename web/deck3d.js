@@ -28,9 +28,9 @@ const DECK_TWEEN_MS = 600;
 // web/annotate.js spanColor). Duplicated here so the custom layer has no
 // script-order dependency on annotate.js.
 function deckSpanColor(v) {
-  if (v === null || v === undefined || Number.isNaN(Number(v))) return "#9ca3af";
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return "#8ea3c7";
   const stops = [
-    [-4, [33, 102, 172]], [-2, [171, 217, 233]], [0, [245, 245, 245]],
+    [-4, [33, 102, 172]], [-2, [171, 217, 233]], [0, [243, 240, 234]],
     [2, [253, 174, 97]], [4, [178, 24, 43]]
   ];
   const x = Math.max(-4, Math.min(4, Number(v)));
@@ -42,7 +42,7 @@ function deckSpanColor(v) {
       return "#" + c.map((v2) => v2.toString(16).padStart(2, "0")).join("");
     }
   }
-  return "#f5f5f5";
+  return "#f3f0ea";
 }
 
 // Largest absolute anomaly over the whole series (all spans, all months).
@@ -126,8 +126,8 @@ function deckMeshSpec(spans, cutoffIdx, lenM, axisBearing, opts) {
       span: s.span, alongM: a, x, y, z: 0,
       len: blen, thick: thickM, width: widthM,
       rotZ: 0, value, isNull,
-      color: isNull ? "#9ca3af" : deckSpanColor(value),
-      emissive: risk === "high" ? "#ef4444" : "#000000",
+      color: isNull ? "#8ea3c7" : deckSpanColor(value),
+      emissive: risk === "high" ? "#ff3b3b" : "#000000",
       emissiveIntensity: risk === "high" ? 0.55 : 0
     };
   });
@@ -404,7 +404,7 @@ function deckBuildScene(spec) {
   for (const p of (spec.pillars || [])) {
     try {
       const geo = new THREE.BoxGeometry(p.w, p.h, p.d);
-      const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color("#6b7280") });
+      const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color("#3b4760") });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(p.x, p.y, p.z || 0);
       scene.add(mesh);

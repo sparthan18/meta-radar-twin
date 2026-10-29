@@ -7,22 +7,13 @@
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <link href="story.css" rel="stylesheet">
+<link href="fui.css" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <style>
-:root {
-  --bg: #ffffff; --panel: #f6f8fa; --card: #ffffff;
-  --text: #16202b; --muted: #5b6b7c; --border: #dbe2ea;
-  --accent: #1d4ed8; --chip: #eef2f6;
-  --risk-none: #4b5563; --risk-watch: #eab308; --risk-elevated: #f97316;
-  --risk-high: #ef4444; --risk-unknown: #9ca3af;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e141c; --panel: #151e29; --card: #182231;
-    --text: #e8eef5; --muted: #9aa9bc; --border: #2a3747;
-    --accent: #7cb3ff; --chip: #223041;
-  }
-}
+/* Tokens live in fui.css (single dark theme, phase 8a). */
 * { box-sizing: border-box; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .skip-link { position: absolute; left: -9999px; top: 0; z-index: 100;
@@ -30,20 +21,23 @@
   border: 1px solid var(--accent); border-radius: 4px; }
 .skip-link:focus { left: 8px; top: 8px; }
 body { margin: 0; background: var(--bg); color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; }
+  font-family: var(--font-reading); font-size: 14px; }
 header { padding: 12px 16px; border-bottom: 1px solid var(--border);
   background: var(--panel); }
-header h1 { margin: 0 0 2px; font-size: 19px; font-weight: 650; }
+header h1 { margin: 0 0 2px; font-size: 19px; font-weight: 600;
+  font-family: var(--font-display); letter-spacing: 0.04em; }
 header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70em; }
 .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
 .slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; }
 .slider-wrap input[type="range"] { flex: 1; min-width: 160px; }
-#cutoffLabel { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 7em; }
-#eventBadge { visibility: hidden; background: #7f1d1d; color: #fff; border-radius: 4px;
-  padding: 3px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+#cutoffLabel { font-family: var(--font-data); font-variant-numeric: tabular-nums;
+  font-weight: 600; min-width: 7em; font-size: 13px; }
+#eventBadge { visibility: hidden; background: var(--accent); color: #fff; border-radius: 4px;
+  padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  font-family: var(--font-data); }
 #eventBadge.show { visibility: visible; }
 .basemap-toggle { display: flex; gap: 6px; }
-.basemap-toggle button, .pill-btn, #btnPlay, #btnCC { border: 1px solid var(--border); background: var(--card);
+.basemap-toggle button, .pill-btn, #btnPlay { border: 1px solid var(--border); background: var(--card);
   color: var(--text); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
 .basemap-toggle button.active { border-color: var(--accent); color: var(--accent);
   font-weight: 600; }
@@ -81,12 +75,13 @@ main { display: flex; min-height: calc(100vh - 148px); }
   #ranking .rankrow { min-height: 40px; }
 }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 10px;
-  font-size: 12.5px; color: var(--muted); }
+  font-size: 11.5px; color: var(--muted); font-family: var(--font-data); }
 .legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px;
   margin-right: 5px; vertical-align: -1px; }
 .legend .worry small { display: block; margin-left: 17px; font-size: 11px;
   color: var(--muted); }
-h2 { font-size: 14px; margin: 12px 0 6px; }
+h2 { font-size: 12px; margin: 12px 0 6px; font-family: var(--font-data);
+  text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
 #ranking { list-style: none; margin: 0; padding: 0; }
 #ranking li { margin: 0 0 4px; padding: 0; border: 0; background: none; }
 #ranking .rankrow { display: flex; gap: 8px; align-items: center; width: 100%;
@@ -95,22 +90,25 @@ h2 { font-size: 14px; margin: 12px 0 6px; }
   text-align: left; }
 #ranking .rankrow.selected { border-color: var(--accent); }
 #ranking .rank { width: 2em; text-align: right; color: var(--muted);
-  font-variant-numeric: tabular-nums; }
+  font-variant-numeric: tabular-nums; font-family: var(--font-data); }
 #ranking .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #ranking .sc { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.2em;
-  text-align: right; }
+  text-align: right; font-family: var(--font-data); }
 .pill { border-radius: 20px; padding: 1px 9px; font-size: 12px; font-weight: 600;
-  color: #fff; white-space: nowrap; }
+  color: #fff; white-space: nowrap; font-family: var(--font-display);
+  text-transform: uppercase; letter-spacing: 0.08em; }
 .pill.none { background: var(--risk-none); }
 .pill.watch { background: var(--risk-watch); color: #1c1917; }
 .pill.elevated { background: var(--risk-elevated); color: #1c1917; }
-.pill.high { background: var(--risk-high); color: #1c1917; }
-.pill.unknown { background: var(--risk-unknown); color: #1f2937; }
-.inspect-flag { font-size: 11.5px; color: var(--risk-high); font-weight: 700;
-  white-space: nowrap; }
+.pill.high { background: var(--risk-high); color: #fff; }
+.pill.unknown { background: var(--risk-unknown); color: #0b1220; }
+.inspect-flag { font-size: 11px; color: var(--risk-high); font-weight: 700;
+  white-space: nowrap; font-family: var(--font-data); text-transform: uppercase;
+  letter-spacing: 0.1em; }
 #detail { border: 1px solid var(--border); border-radius: 6px; background: var(--card);
   padding: 10px 12px; margin-top: 6px; }
-#detail h3 { margin: 0 0 2px; font-size: 16px; }
+#detail h3 { margin: 0 0 2px; font-size: 16px; font-family: var(--font-display);
+  font-weight: 600; letter-spacing: 0.04em; }
 #side { position: relative; }
 #btnMemo:disabled { opacity: 0.55; cursor: not-allowed; }
 #memoPanel { position: absolute; inset: 0; z-index: 5; overflow-y: auto;
@@ -118,12 +116,14 @@ h2 { font-size: 14px; margin: 12px 0 6px; }
 #memoPanel[hidden] { display: none; }
 .memo-head { display: flex; align-items: center; justify-content: space-between;
   gap: 10px; margin-bottom: 6px; }
-.memo-head h2 { margin: 0; font-size: 15px; }
+.memo-head h2 { margin: 0; }
 #btnMemoClose { border: 1px solid var(--border); background: var(--card);
   color: var(--text); border-radius: 4px; padding: 4px 12px; cursor: pointer;
   font-size: 14px; line-height: 1.4; }
-#memoBody { font-size: 13.5px; overflow-wrap: break-word; }
-#memoBody h1 { font-size: 17px; margin: 8px 0 6px; }
+#memoBody { font-size: 13.5px; overflow-wrap: break-word;
+  font-family: var(--font-reading); line-height: 1.55; }
+#memoBody h1 { font-size: 17px; margin: 8px 0 6px; font-family: var(--font-display);
+  font-weight: 600; letter-spacing: 0.04em; text-transform: none; color: var(--text); }
 #memoBody h2 { font-size: 14.5px; }
 #memoBody h3 { font-size: 13.5px; margin: 10px 0 4px; }
 #memoBody table { display: block; overflow-x: auto; border-collapse: collapse;
@@ -135,17 +135,19 @@ h2 { font-size: 14px; margin: 12px 0 6px; }
 .notmon { color: var(--muted); font-style: italic; }
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px;
   margin: 8px 0; font-variant-numeric: tabular-nums; }
-.stat-grid dt { color: var(--muted); font-size: 12px; }
-.stat-grid dd { margin: 0 0 4px; font-size: 13.5px; }
+.stat-grid dt { color: var(--muted); font-size: 11px; font-family: var(--font-data);
+  text-transform: uppercase; letter-spacing: 0.1em; }
+.stat-grid dd { margin: 0 0 4px; font-size: 13.5px; font-family: var(--font-data); }
 .flags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
-.flag { font-size: 11.5px; border-radius: 4px; padding: 1px 7px; background: var(--chip);
-  color: var(--muted); border: 1px solid var(--border); }
+.flag { font-size: 11px; border-radius: 4px; padding: 1px 7px; background: var(--chip);
+  color: var(--muted); border: 1px solid var(--border); font-family: var(--font-data);
+  text-transform: uppercase; letter-spacing: 0.1em; }
 .flag.on { background: #1f3a5f; color: #fff; border-color: #1f3a5f; }
-@media (prefers-color-scheme: dark) { .flag.on { background: #2f5b94; border-color: #2f5b94; } }
 .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
 .vs .col { border: 1px solid var(--border); border-radius: 5px; padding: 7px 9px; }
-.vs h4 { margin: 0 0 5px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
-.prob { margin: 4px 0; font-size: 12px; }
+.vs h4 { margin: 0 0 5px; font-size: 12px; color: var(--muted); font-weight: 600;
+  font-family: var(--font-data); text-transform: uppercase; letter-spacing: 0.1em; }
+.prob { margin: 4px 0; font-size: 12px; font-family: var(--font-data); }
 .prob .bar { height: 6px; border-radius: 3px; background: var(--chip);
   border: 1px solid var(--border); margin-top: 2px; }
 .prob .fill { height: 100%; border-radius: 3px; background: var(--accent); }
@@ -154,8 +156,8 @@ h2 { font-size: 14px; margin: 12px 0 6px; }
   margin-top: 8px; font-size: 12.5px; }
 .owner-block h4 { margin: 0 0 4px; font-size: 12.5px; }
 .owner-block blockquote { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
-  border-top: 1px solid var(--border); }
+footer { padding: 8px 16px; color: var(--muted); font-size: 11px;
+  border-top: 1px solid var(--border); font-family: var(--font-data); }
 .plain-reason { font-size: 13.5px; margin: 6px 0; }
 .memo-link { margin: 6px 0; }
 .memo-link button { border: 1px solid var(--border); background: var(--card);
@@ -163,13 +165,16 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
   font-size: 13px; }
 details.eng { border: 1px solid var(--border); border-radius: 5px;
   padding: 6px 9px; margin: 8px 0; }
-details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
+  font-family: var(--font-data); text-transform: uppercase; letter-spacing: 0.1em; }
 .sideview { margin: 8px 0; }
-.sideview h4 { margin: 6px 0 2px; font-size: 12.5px; color: var(--muted);
-  font-weight: 600; }
+.sideview h4 { margin: 6px 0 2px; font-size: 12px; color: var(--muted);
+  font-weight: 600; font-family: var(--font-data); text-transform: uppercase;
+  letter-spacing: 0.1em; }
 .sideview svg { width: 100%; height: auto; display: block;
-  background: var(--card); border: 1px solid var(--border); border-radius: 5px; }
-.deck-note { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+  background: transparent; border: 0; }
+.deck-note { font-size: 11px; color: var(--muted); margin: 2px 0 0;
+  font-family: var(--font-data); }
 </style>
 </head>
 <body data-mode="story">
@@ -183,17 +188,11 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
     <div class="slider-wrap">
       <label for="slider">Month</label>
       <input id="slider" type="range" min="0" max="32" value="32" step="1">
-      <div id="scrubWrap">
-        <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Story timeline">
-        <div id="chapters"></div>
-        <div id="monthTicks" hidden></div>
-      </div>
       <span id="cutoffLabel">2024-09-01</span>
       <span id="eventBadge">Carolabrücke collapsed ?? days after this cutoff (11 Sep 2024)</span>
       <button id="btnPlay" type="button" aria-pressed="false">Play</button>
-      <button id="btnCC" type="button" class="active" aria-pressed="true" title="Toggle captions">CC</button>
     </div>
-    <div id="headline" aria-live="polite"></div>
+    <div id="headline" class="fui-panel" aria-live="polite"></div>
     <div id="historyStrip" hidden aria-label="History strip: risk per bridge per month"></div>
     <div class="basemap-toggle" role="group" aria-label="Basemap">
       <button id="btnImagery" type="button" aria-pressed="false">Imagery</button>
@@ -206,13 +205,28 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
       <button id="btnMemo" type="button" aria-expanded="false" disabled title="no memo for this month">Report (memo)</button>
     </div>
     <div class="basemap-toggle" role="group" aria-label="Mode">
-      <button id="btnExploreStory" type="button">Explore this month</button>
       <button id="btnWatchStory" type="button">Watch the story</button>
     </div>
   </div>
 </header>
+<div id="storyBar" aria-label="Story timeline bar">
+  <button id="btnCC" type="button" class="fui-btn active" aria-pressed="true" title="Toggle captions">CC</button>
+  <button id="btnExploreStory" type="button" class="fui-btn" aria-label="Explore this month">Explore</button>
+  <div id="scrubWrap">
+    <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Story timeline">
+    <div id="chapters"></div>
+    <div id="monthTicks" hidden></div>
+  </div>
+  <span id="storyMonth">2024-09-01</span>
+</div>
 <main>
   <div id="map">
+    <div id="vignette" aria-hidden="true"></div>
+    <div id="grain" aria-hidden="true"></div>
+    <div id="scanline" aria-hidden="true"></div>
+    <div id="sceneDip" aria-hidden="true"></div>
+    <div id="letterTop" class="letterbox" aria-hidden="true"></div>
+    <div id="letterBottom" class="letterbox" aria-hidden="true"></div>
     <div id="storyLanding">
       <h2>RadarTwin Dresden</h2>
       <p>Three years of satellite radar over 20 bridges — and the month the data flagged one for inspection.</p>
@@ -221,12 +235,12 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
     <div id="sceneTitle" hidden><strong>RadarTwin Dresden</strong><span>A bridge watchlist hindcast, Jan 2022 – Sep 2024</span></div>
     <div id="sceneCover" hidden><span>Loading the radar explainer…</span></div>
     <div id="sceneDim" hidden></div>
-    <div id="sceneMemo" hidden aria-label="Inspection memo">
+    <div id="sceneMemo" class="fui-panel" hidden aria-label="Inspection memo">
       <h3 id="sceneMemoTitle">Inspection memo</h3>
       <div id="sceneMemoBody" aria-live="off"></div>
     </div>
     <div id="sceneProof" hidden aria-label="Truncation proof">
-      <div class="proof-card">
+      <div class="proof-card fui-panel">
         <div class="proof-cols">
           <div class="proof-col"><h4>full run</h4>
             <div class="proof-val"><span class="proof-k">score</span> <span id="proofScoreFull">0.00</span></div>
@@ -245,21 +259,22 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
     <div id="caption"></div>
     <div id="captionLive" class="visually-hidden" aria-live="polite"></div>
     <div id="sceneTag" hidden></div>
-    <div id="deckHud" hidden aria-live="polite"></div>
+    <div id="sceneIndex" aria-hidden="true" hidden>01 / 09</div>
+    <div id="deckHud" class="fui-panel fui-panel--sm" hidden aria-live="polite"></div>
     <div id="storyCallouts"></div>
     <div id="dateRoll" hidden></div>
     <div id="storyEnd" hidden>
-      <div class="story-end-card">
+      <div class="story-end-card fui-panel">
         <p id="storyEndLine1"></p>
         <p id="storyEndLine2"></p>
         <div class="story-end-actions">
-          <button id="btnReplay" type="button">Replay</button>
-          <button id="btnExploreEnd" type="button">Explore this month</button>
+          <button id="btnReplay" type="button" class="fui-btn">Replay</button>
+          <button id="btnExploreEnd" type="button" class="fui-btn">Explore this month</button>
         </div>
       </div>
     </div>
     <div id="hoverLabel" hidden></div>
-    <div id="sceneSideView" hidden aria-label="Bridge side view">
+    <div id="sceneSideView" class="fui-panel" hidden aria-label="Bridge side view">
       <h3 id="sceneSideTitle">Carolabrücke — side view</h3>
       <svg id="sceneSideSvg" role="img" aria-label="Side view of the bridge deck"></svg>
       <p id="sceneSideNote" class="deck-note"></p>
@@ -267,14 +282,14 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
   </div>
   <aside id="side">
     <div class="legend" id="legend">
-      <span class="worry"><span class="sw" style="background:#4b5563"></span>fine <small>none</small></span>
-      <span class="worry"><span class="sw" style="background:#eab308"></span>keep watching <small>watch</small></span>
-      <span class="worry"><span class="sw" style="background:#f97316"></span>look closer <small>elevated</small></span>
-      <span class="worry"><span class="sw" style="background:#ef4444"></span>send an inspector <small>high</small></span>
-      <span><span class="sw" style="background:#9ca3af"></span>not monitored</span>
+      <span class="worry"><span class="sw" style="background:#3b4760"></span>fine <small>none</small></span>
+      <span class="worry"><span class="sw" style="background:#f2b84b"></span>keep watching <small>watch</small></span>
+      <span class="worry"><span class="sw" style="background:#ff7a2f"></span>look closer <small>elevated</small></span>
+      <span class="worry"><span class="sw" style="background:#ff3b3b"></span>send an inspector <small>high</small></span>
+      <span><span class="sw" style="background:#8ea3c7"></span>not monitored</span>
       <span>span dots: −4 (blue) … +4 (red) mm/yr vertical change</span>
       <span>scatterers: same ±4 scale, grey = no data at this month</span>
-      <span><span class="sw" style="background:#22d3ee"></span>SAM outlines (one Sentinel-2 chip; near Carolabrücke only)</span>
+      <span><span class="sw" style="background:#5ee7ff"></span>SAM outlines (one Sentinel-2 chip; near Carolabrücke only)</span>
     </div>
     <h2>Ranking at <span id="rankCutoff">2024-09-01</span></h2>
     <ol id="ranking" tabindex="-1"></ol>
@@ -289,16 +304,17 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
     </div>
   </aside>
 </main>
-<footer>Model: muse-spark-1.3 (5 votes per question) checked against a deterministic rubric. Owner condition is an external input shown only in its own block. Basemap: Esri World Imagery / Esri Canvas World Dark Gray.</footer>
+<footer>Model: muse-spark-1.3 (5 votes per question) checked against a deterministic rubric. Owner condition is an external input shown only in its own block. Basemap: OpenFreeMap (© OpenMapTiles © OpenStreetMap contributors) / Esri World Imagery.</footer>
 <script src="annotate.js"></script>
 <script src="memo.js"></script>
 <script src="explainer.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
 <script src="deck3d.js"></script>
+<script src="basemap.js"></script>
 <script>
 "use strict";
-const RISK_COLORS = { none: "#4b5563", watch: "#eab308", elevated: "#f97316",
-  high: "#ef4444", unknown: "#9ca3af" };
+const RISK_COLORS = { none: "#3b4760", watch: "#f2b84b", elevated: "#ff7a2f",
+  high: "#ff3b3b", unknown: "#8ea3c7" };
 const SPAN_COLORS = ["#1f77b4","#d62728","#2ca02c","#9467bd","#ff7f0e",
   "#8c564b","#e377c2","#7f7f7f","#17becf","#bcbd22"];
 let CUT = [], DEC = {}, BRIDGES = [], SPANS = {}, OWNER = {}, EVENT_DATE = "", EVENT_MONTH = "";
@@ -322,9 +338,9 @@ const DUR_DOT = REDUCED ? 0 : 300;
 // 98 features); a single style update keeps slider drags smooth.
 function scatterColorExpr(idx) {
   const atIdx = ["at", idx, ["get", "v"]];
-  return ["case", ["==", atIdx, null], "#9ca3af",
+  return ["case", ["==", atIdx, null], "#8ea3c7",
     ["interpolate", ["linear"], atIdx,
-      -4, "#2166ac", -2, "#abd9e9", 0, "#f5f5f5", 2, "#fdae61", 4, "#b2182b"]];
+      -4, "#2166ac", -2, "#abd9e9", 0, "#f3f0ea", 2, "#fdae61", 4, "#b2182b"]];
 }
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -388,10 +404,28 @@ function closeMemo() {
 
 function setBasemap(mode) {
   const dark = mode !== "imagery";
+  // Dark is the OpenFreeMap vector group from web/basemap.js (with the 3D
+  // extrusion); Imagery is the lone Esri raster. The Esri dark canvas is
+  // gone (phase 8a).
   try {
-    if (map && map.getLayer("esri-layer") && map.getLayer("esri-dark-layer")) {
-      map.setLayoutProperty("esri-layer", "visibility", dark ? "none" : "visible");
-      map.setLayoutProperty("esri-dark-layer", "visibility", dark ? "visible" : "none");
+    if (map) {
+      if (map.getLayer("esri-layer")) {
+        map.setLayoutProperty("esri-layer", "visibility",
+          dark ? "none" : "visible");
+      }
+      let ids = [];
+      try {
+        ids = (typeof FuiVectorLayerIds === "function")
+          ? FuiVectorLayerIds() : [];
+      } catch (e) { ids = []; }
+      for (const id of ids) {
+        try {
+          if (map.getLayer(id)) {
+            map.setLayoutProperty(id, "visibility",
+              dark ? "visible" : "none");
+          }
+        } catch (e) { /* ignore */ }
+      }
     }
   } catch (e) {}
   $("btnImagery").classList.toggle("active", !dark);
@@ -461,7 +495,7 @@ function renderHistoryStrip(playheadIdx, revealIdx) {
   const ph = (playheadIdx === undefined || playheadIdx === null) ? cutoffIdx : playheadIdx;
   const rv = (revealIdx === undefined || revealIdx === null) ? CUT.length - 1 : revealIdx;
   const NS = "http://www.w3.org/2000/svg";
-  const labelW = 150, cellW = 13, cellH = 13, gap = 1, topH = 4;
+  const labelW = 150, cellW = 10, cellH = 10, gap = 2, topH = 4;
   const W = labelW + CUT.length * (cellW + gap);
   const H = topH + HISTORY_ORDER.length * (cellH + gap);
   while (box.firstChild) box.removeChild(box.firstChild);
@@ -494,7 +528,7 @@ function renderHistoryStrip(playheadIdx, revealIdx) {
         : (typeof riskColor === "function" ? riskColor(risk)
           : (RISK_COLORS[risk] || RISK_COLORS.unknown));
       const rect = mk("rect", { x: String(x), y: String(y), width: String(cellW),
-        height: String(cellH), "class": "history-cell" + (m === ph ? " is-playhead" : "") });
+        height: String(cellH), "class": "history-cell" });
       rect.setAttribute("fill", fill);
       rect.dataset.month = String(m);
       rect.dataset.bid = String(bid);
@@ -508,10 +542,10 @@ function renderHistoryStrip(playheadIdx, revealIdx) {
       }
     }
   });
-  // Playhead column outline.
-  const px = labelW + ph * (cellW + gap);
-  mk("rect", { x: String(px - 1), y: "0", width: String(cellW + 2),
-    height: String(H), "class": "history-playhead" });
+  // Playhead: a 1 px hairline through the column centre.
+  const px = labelW + ph * (cellW + gap) + cellW / 2;
+  mk("line", { x1: String(px), y1: "0", x2: String(px), y2: String(H),
+    "class": "history-playhead" });
 }
 
 function historyStripClick(monthIdx) {
@@ -557,6 +591,25 @@ function updateExploreCallouts(cutoff) {
     return ra - rb || String(a.title).localeCompare(String(b.title));
   });
   try { AnnotateSetCallouts(list); } catch (e) { /* ignore */ }
+}
+
+// High-marker reticles (phase 8a): every model-high bridge at the bound
+// cutoff gets a dashed rotating ring on the annotation layer. Runs in both
+// modes from applyCutoff, reading only the bound cutoff's table.
+function updateReticles(cutoff) {
+  try {
+    if (typeof AnnotateSetReticles !== "function") return;
+  } catch (e) { return; }
+  const table = DEC[cutoff] || {};
+  const list = [];
+  for (const bid of Object.keys(ID2NAME)) {
+    const d = table[bid];
+    if (!d || !d.model || d.model.risk !== "high") continue;
+    const c = CENTROIDS[bid];
+    if (!c) continue;
+    list.push({ lon: c[0], lat: c[1] });
+  }
+  try { AnnotateSetReticles(list); } catch (e) { /* ignore */ }
 }
 
 // Explore close-up (phase 7d): when a bridge is selected and the zoom is
@@ -700,29 +753,40 @@ function initMap() {
     $("btnDark").setAttribute("aria-pressed", dark ? "true" : "false");
   } catch (e) {}
   const darkInit = basemapPref !== "imagery";
-  map = new maplibregl.Map({
-    container: "map",
-    style: {
+  // Vector dark basemap from web/basemap.js (OpenFreeMap tiles restyled to
+  // the FUI palette, with 3D buildings); the Esri dark canvas is gone.
+  // Without basemap.js the page falls back to background + imagery.
+  let fuiStyle = null;
+  try {
+    if (typeof buildFuiStyle === "function") {
+      fuiStyle = buildFuiStyle({ dark: darkInit });
+      if (typeof validateFuiStyle === "function") {
+        const problems = validateFuiStyle(fuiStyle);
+        if (problems.length && typeof console !== "undefined" && console.warn) {
+          console.warn("basemap style problems: " + problems.join("; "));
+        }
+      }
+    }
+  } catch (e) { fuiStyle = null; }
+  if (!fuiStyle) {
+    fuiStyle = {
       version: 8,
       sources: {
         esri: { type: "raster",
           tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-          tileSize: 256,
-          attribution: "Esri World Imagery" },
-        esri_dark: { type: "raster",
-          tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"],
-          tileSize: 256,
-          maxzoom: 16,
-          attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors" }
+          tileSize: 256, attribution: "Esri World Imagery" }
       },
       layers: [
+        { id: "fui-background", type: "background",
+          paint: { "background-color": "#070b14" } },
         { id: "esri-layer", type: "raster", source: "esri",
-          paint: { "raster-saturation": -0.7, "raster-contrast": 0.05 },
-          layout: { visibility: darkInit ? "none" : "visible" } },
-        { id: "esri-dark-layer", type: "raster", source: "esri_dark",
-          layout: { visibility: darkInit ? "visible" : "none" } }
+          paint: { "raster-saturation": -0.7, "raster-contrast": 0.05 } }
       ]
-    },
+    };
+  }
+  map = new maplibregl.Map({
+    container: "map",
+    style: fuiStyle,
     center: [13.745, 51.057], zoom: REDUCED ? 12 : 11, pitch: 55, maxPitch: 75
   });
   map.addControl(new maplibregl.NavigationControl(), "top-left");
@@ -791,16 +855,17 @@ function initMap() {
       paint: { "line-color": RISK_COLORS.unknown, "line-width": 2,
         "line-dasharray": [3, 2.5] } });
     map.addLayer({ id: "sam-lines", type: "line", source: "sam",
-      paint: { "line-color": "#22d3ee", "line-width": 2.5 },
+      paint: { "line-color": "#5ee7ff", "line-width": 2.5 },
       layout: { visibility: "none" } });
     map.addLayer({ id: "spans-circles", type: "circle", source: "spans",
       paint: {
         "circle-color": ["interpolate", ["linear"],
           ["coalesce", ["feature-state", "v"], 0],
-          -4, "#2166ac", -2, "#abd9e9", 0, "#f5f5f5", 2, "#fdae61", 4, "#b2182b"],
+          -4, "#2166ac", -2, "#abd9e9", 0, "#f3f0ea", 2, "#fdae61", 4, "#b2182b"],
         "circle-color-transition": { duration: DUR_DOT },
         "circle-radius": 6, "circle-opacity": 0.92,
-        "circle-stroke-color": "#ffffff", "circle-stroke-width": 1 } });
+        "circle-stroke-color": "#bfd6ff", "circle-stroke-opacity": 0.6,
+        "circle-stroke-width": 1 } });
     if (map.getSource("scatterers")) {
       map.addLayer({ id: "scatterers-circles", type: "circle",
         source: "scatterers",
@@ -811,20 +876,29 @@ function initMap() {
           "circle-stroke-color": "#ffffff", "circle-stroke-width": 0.75 },
         layout: { visibility: "none" } });
     }
-    // City-zoom risk markers above the span dots (phase 5c): 5b left them
-    // underneath, so up to 98 mostly white dots covered the coloured markers.
-    // Glow sits directly below the markers; markers stay last so they sit
-    // above every other bridge layer too.
+    // City-zoom risk reticles above the span dots (phase 5c put the old
+    // markers here; 8a replaces them with the reticle): the widened glow
+    // below, the 2 px risk dot, the 14 px hairline ring, and a transparent
+    // hit disc so the small dot stays clickable. Markers stay last so they
+    // sit above every other bridge layer too.
     map.addLayer({ id: "bridges-glow", type: "circle", source: "bridge-centroids",
       maxzoom: 15,
-      paint: { "circle-radius": 18, "circle-color": RISK_COLORS.high,
+      paint: { "circle-radius": 28, "circle-color": RISK_COLORS.high,
         "circle-opacity": ["case", ["==", ["feature-state", "risk"], "high"], 0.25, 0],
         "circle-blur": 1 } });
     map.addLayer({ id: "bridges-markers", type: "circle", source: "bridge-centroids",
       maxzoom: 15,
-      paint: { "circle-color": riskExpr, "circle-radius": 8, "circle-opacity": 0.9,
-        "circle-color-transition": { duration: DUR_BRIDGE },
-        "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
+      paint: { "circle-color": riskExpr, "circle-radius": 2, "circle-opacity": 0.95,
+        "circle-color-transition": { duration: DUR_BRIDGE } } });
+    map.addLayer({ id: "bridges-reticle", type: "circle", source: "bridge-centroids",
+      maxzoom: 15,
+      paint: { "circle-color": "rgba(0, 0, 0, 0)", "circle-radius": 7,
+        "circle-stroke-color": "rgba(143, 184, 255, 0.28)",
+        "circle-stroke-width": 1, "circle-stroke-opacity": 1 } });
+    map.addLayer({ id: "bridges-markers-hit", type: "circle",
+      source: "bridge-centroids", maxzoom: 15,
+      paint: { "circle-color": "rgba(0, 0, 0, 0)", "circle-radius": 12,
+        "circle-opacity": 0 } });
     const storyOrSelect = (bid) => {
       // In Story mode a bridge click pauses and opens Explore on it.
       if (document.body.dataset.mode === "story" && typeof StoryBridgeClick === "function") {
@@ -837,6 +911,9 @@ function initMap() {
       if (e.features && e.features.length) storyOrSelect(String(e.features[0].properties.id));
     });
     map.on("click", "bridges-markers", (e) => {
+      if (e.features && e.features.length) storyOrSelect(String(e.features[0].properties.id));
+    });
+    map.on("click", "bridges-markers-hit", (e) => {
       if (e.features && e.features.length) storyOrSelect(String(e.features[0].properties.id));
     });
     map.on("click", "spans-circles", (e) => {
@@ -928,6 +1005,10 @@ function initMap() {
 function applyCutoff() {
   const cutoff = CUT[cutoffIdx];
   $("cutoffLabel").textContent = cutoff;
+  try {
+    const sm = document.getElementById("storyMonth");
+    if (sm) sm.textContent = cutoff;
+  } catch (e) { /* ignore */ }
   $("rankCutoff").textContent = cutoff;
   $("slider").value = String(cutoffIdx);
   $("slider").setAttribute("aria-valuetext", monthName(cutoff));
@@ -966,6 +1047,7 @@ function applyCutoff() {
   renderDetail(cutoff, selectedId);
   updateMemoButton(cutoff);
   refreshMemoPanel(cutoff);
+  updateReticles(cutoff);
   // Explore owns the strip (always full) and the high-bridge callouts;
   // Story mode drives both itself per scene.
   try {
@@ -1072,7 +1154,7 @@ function chartSVG(bid) {
   const chartName = ID2NAME[bid] || bid;
   let s = `<svg id="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Per-span anomaly for ${esc(chartName)} up to ${esc(CUT[cutoffIdx])}, ${arr.length} spans">`;
   for (const g of [-4, 0, 4]) {
-    s += `<line x1="${L}" y1="${Y(g)}" x2="${plotRight}" y2="${Y(g)}" stroke="#888" stroke-width="${g === 0 ? 1 : 0.5}" stroke-dasharray="${g === 0 ? "none" : "3,3"}" opacity="0.6"/>`;
+    s += `<line x1="${L}" y1="${Y(g)}" x2="${plotRight}" y2="${Y(g)}" stroke="#8ea3c7" stroke-width="${g === 0 ? 1 : 0.5}" stroke-dasharray="${g === 0 ? "none" : "3,3"}" opacity="0.6"/>`;
     s += `<text x="${L - 4}" y="${Y(g) + 3}" font-size="9" text-anchor="end" fill="currentColor">${g}</text>`;
   }
   arr.forEach((sp, k) => {
@@ -1098,10 +1180,10 @@ function chartSVG(bid) {
   if (showEvent) {
     const ndays = daysAfter(CUT[cutoffIdx], EVENT_DATE);
     const ex = plotRight + 35;
-    s += `<line x1="${ex}" y1="${T}" x2="${ex}" y2="${H - B}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3"/>`;
-    s += `<text x="${ex}" y="${T + 10}" font-size="9" text-anchor="middle" fill="#ef4444">collapsed</text>`;
-    s += `<text x="${ex}" y="${T + 21}" font-size="9" text-anchor="middle" fill="#ef4444">+${ndays}d &#8594;</text>`;
-    s += `<text x="${ex}" y="${T + 32}" font-size="8" text-anchor="middle" fill="#ef4444">(${esc(fmtEventDate(EVENT_DATE))})</text>`;
+    s += `<line x1="${ex}" y1="${T}" x2="${ex}" y2="${H - B}" stroke="#ff3b3b" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+    s += `<text x="${ex}" y="${T + 10}" font-size="9" text-anchor="middle" fill="#ff3b3b">collapsed</text>`;
+    s += `<text x="${ex}" y="${T + 21}" font-size="9" text-anchor="middle" fill="#ff3b3b">+${ndays}d &#8594;</text>`;
+    s += `<text x="${ex}" y="${T + 32}" font-size="8" text-anchor="middle" fill="#ff3b3b">(${esc(fmtEventDate(EVENT_DATE))})</text>`;
   }
   const first = CUT[0] ? CUT[0].slice(0, 7) : "";
   const last = CUT[cutoffIdx] ? CUT[cutoffIdx].slice(0, 7) : "";

@@ -217,6 +217,10 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 - **What you see:** a scene asks for pitch 65 and the map reads 60; no error. MapLibre clamps to the map's `maxPitch`, default 60.
 - **Fix:** set `maxPitch` in the map options (75 here). Also: a camera mode that "keeps the centre" must still set it for seeks, or a chapter click lands with the subject at the frame's edge.
 
+### One bad font stack blanks the whole vector basemap
+- **What you see:** vector tiles download and are marked loaded, but every layer on the source renders nothing: no water, roads or buildings, zero buckets in each tile, no error event. Bisecting the style finds the symbol layer: its `text-font` stack named a face the glyph host does not have, MapLibre requested the combined stack as one glyph file, got 404, and the failed glyph fetch aborted the tile parse for the entire source.
+- **Fix:** use only faces the glyph host serves, one per stack (OpenFreeMap: `Noto Sans Regular`; no mono face). Test a style by loading it in a hidden MapLibre instance and counting `querySourceFeatures` for water; bisect layers when it is zero.
+
 ## Environment
 
 - Python 3.14 has no wheels for rasterio or geopandas, so the project pins 3.12.

@@ -88,19 +88,20 @@ check("planted: label covering the point is caught",
   !(centre.x <= 400 && 400 <= centre.x + 148 &&
     centre.y <= 300 && 300 <= centre.y + 40));
 
-// --- spanColor / riskColor ---
-check("span null is grey", spanColor(null) === "#9ca3af");
+// --- spanColor / riskColor (phase 8a FUI palette: warmed zero, spec
+// risk tokens, blue-biased null/unknown) ---
+check("span null is dim blue-grey", spanColor(null) === "#8ea3c7");
 check("span -4 is blue", spanColor(-4) === "#2166ac");
 check("span +4 is red", spanColor(4) === "#b2182b");
-check("span 0 is light", spanColor(0) === "#f5f5f5");
+check("span 0 is warmed white", spanColor(0) === "#f3f0ea");
 check("span clamps beyond range", spanColor(10) === spanColor(4) &&
   spanColor(-10) === spanColor(-4));
 check("risk colours",
-  riskColor("high") === "#ef4444" && riskColor("elevated") === "#f97316" &&
-  riskColor("watch") === "#eab308" && riskColor("none") === "#4b5563" &&
-  riskColor("unknown") === "#9ca3af" && riskColor(null) === "#9ca3af");
+  riskColor("high") === "#ff3b3b" && riskColor("elevated") === "#ff7a2f" &&
+  riskColor("watch") === "#f2b84b" && riskColor("none") === "#3b4760" &&
+  riskColor("unknown") === "#8ea3c7" && riskColor(null) === "#8ea3c7");
 check("planted: swapped risk colours are caught",
-  riskColor("high") !== "#4b5563");
+  riskColor("high") !== "#3b4760");
 
 // --- fastestSpan ---
 const SPANS = [
@@ -135,9 +136,9 @@ check("deck largest maps to 28 px",
   Math.abs(Math.abs(geo.blocks[1].dy) - 28) < 1e-9);
 check("deck x scales with along_m/lenM",
   geo.blocks[0].x < geo.blocks[1].x && geo.blocks[1].x < geo.blocks[2].x);
-check("deck null is grey and flat",
+check("deck null is dim blue-grey and flat",
   geo.blocks[2].isNull === true && geo.blocks[2].dy === 0 &&
-  geo.blocks[2].color === "#9ca3af");
+  geo.blocks[2].color === "#8ea3c7");
 check("deck positive value displaces up", geo.blocks[0].dy < 0);
 check("deck blocks sorted by along_m",
   geo.blocks.map((b) => b.span).join(",") === "0,1,2");

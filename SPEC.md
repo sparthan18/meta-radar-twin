@@ -514,7 +514,8 @@ slab, spans displaced by their anomaly at the selected cutoff (exaggerated, labe
 **Phase 7 (story mode):** the page opens as a nine-scene piece that plays on the page itself (camera,
 captions, annotations, a 3D bridge), with the dashboard as Explore mode one click away. The scene
 specification, director rules and phase split (7a–7d) are in `docs/story-spec.md`; every scene
-reads only its bound cutoff. Libraries: GSAP 3 and three.js, pinned from cdnjs. Deployment only
+reads only its bound cutoff. The visual contract (cinematic FUI: typography, palette, vector basemap
+with 3D buildings, film treatment, components, motion; phases 8a–8d) is `docs/design-spec.md`. Libraries: GSAP 3 and three.js, pinned from cdnjs. Deployment only
 after the owner approves the host; a live "Run audit" button needs a hosted service and stays out
 unless approved.
 

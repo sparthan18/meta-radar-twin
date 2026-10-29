@@ -1,0 +1,9 @@
+Phase 8a fix: the vector basemap renders nothing, measured and bisected in a real browser. Change only web/basemap.js and tests/test_basemap.js (and tests/frames.md if it describes the label font).
+
+Measured: vector tiles download (HTTP 200, valid MVT) and the source cache marks them loaded, but every tile has zero buckets and no feature index; `querySourceFeatures('openmaptiles', {sourceLayer: 'water'})` is 0 and the map is black behind the markers. Bisecting the style in a hidden MapLibre instance: the style without `fui-places` renders water (148 features at zoom 12); the style with `fui-places` renders nothing. The cause is the label layer's `text-font` stack `["Noto Sans Mono Regular", "Noto Sans Regular"]`: MapLibre requests one combined glyph file for the whole stack (`fonts/Noto%20Sans%20Mono%20Regular,Noto%20Sans%20Regular/0-255.pbf`), the host returns 404 (it has no mono face and no combined stacks), and the failed glyph fetch aborts the tile parse for every layer on the source. With `text-font: ["Noto Sans Regular"]` the same style renders water (148) and labels (8).
+
+Fix: set `FUI_LABEL_FONT` to `["Noto Sans Regular"]` (the host serves `fonts/Noto%20Sans%20Regular/0-255.pbf` with 200; there is no mono face there, so the mono look for map labels comes from uppercase and letter-spacing only, which the layer already sets). Update the comment that claims a mono stack, `validateFuiStyle` so it rejects any `text-font` stack with more than one face or a face other than `Noto Sans Regular`, and the test with a planted two-face stack. Do not change anything else in the style.
+
+Prove it from the code and the test; you have no browser. The reviewer will reload and count water features and labels.
+
+Standing rules: do not use jg/jevgrep or any tool that sends code to an external service; no spend, no network, no installs, no commits, no background jobs, no `&`. Call the build steps "phases". Finish with the diff and the test result.
