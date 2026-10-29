@@ -7,8 +7,10 @@ const story = require("../web/story.js");
 const {
   captionText, storyMonthLabel, storyFmtEventDate, storyDaysBetween,
   storyAddDays, reasonFromFlags, headlineText, topHighBridge, highCount,
+  orderBridgesByRank, scene3LitCount,
   firstLevelHits, buildScenes, sceneBounds, totalDuration,
-  sceneIndexAtTime, scene4Allowed, captionDataFor
+  sceneIndexAtTime, scene4Allowed, captionDataFor,
+  captionIndexAtLocalTime, captionAtTime, storyOrbitBearing
 } = story;
 
 let failures = 0;
@@ -127,6 +129,41 @@ check("no high returns null", topHighBridge(DEC["2022-01-01"], NAMES) === null);
 check("high counts", highCount(DEC["2022-01-01"]) === 0 &&
   highCount(DEC["2024-08-01"]) === 2 && highCount(DEC["2024-09-01"]) === 1);
 
+// --- phase 7b: rank order + scene-3 light-up ---
+const ORDER_TBL = {
+  4: mkDecision(9, "none", {}),
+  7: mkDecision(6, "elevated", { outlier: true }),
+  0: mkDecision(12, "none", {}),
+  1: mkDecision(null, null, {})
+};
+check("rank order sorts by rank, not-monitored last",
+  orderBridgesByRank(ORDER_TBL, NAMES).join(",") === "7,4,0,1");
+check("rank tie breaks by name", orderBridgesByRank({
+  4: mkDecision(2, "high", ESC),
+  7: mkDecision(2, "high", ESC)
+}, NAMES).join(",") === "7,4");
+check("planted: unordered ranks are caught",
+  orderBridgesByRank(ORDER_TBL, NAMES).join(",") !== "4,7,0,1");
+check("scene-3 dark during the fly-in",
+  scene3LitCount(0, 20) === 0 && scene3LitCount(1.999, 20) === 0);
+check("scene-3 first bridge at 2 s", scene3LitCount(2.0, 20) === 1);
+check("scene-3 one bridge per 0.25 s",
+  scene3LitCount(2.24, 20) === 1 && scene3LitCount(2.25, 20) === 2 &&
+  scene3LitCount(6.75, 20) === 20);
+check("scene-3 clamps at the total", scene3LitCount(99, 20) === 20);
+check("planted: instant light-up is caught", scene3LitCount(0, 20) !== 20);
+check("7b scenes 3/5/6 are real",
+  story.STORY_PLACEHOLDERS["twenty-bridges"] === undefined &&
+  story.STORY_PLACEHOLDERS["august"] === undefined &&
+  story.STORY_PLACEHOLDERS["september"] === undefined);
+check("7b scenes 2/7/8 stay placeholders",
+  story.STORY_PLACEHOLDERS["how-radar-sees"] === true &&
+  story.STORY_PLACEHOLDERS["the-report"] === true &&
+  story.STORY_PLACEHOLDERS["the-proof"] === true);
+check("7b timing constants",
+  story.STORY_SCENE3_FLY === 2.0 && story.STORY_SCENE3_GAP === 0.25 &&
+  story.STORY_SCENE6_ORBIT === 6.0 && story.STORY_GLOW_PULSE === 1.2);
+
 // --- first level hits ---
 const HCUTS = ["2022-01-01", "2022-02-01", "2022-03-01"];
 const HDEC = {
@@ -216,6 +253,45 @@ check("storyDaysBetween", storyDaysBetween("2024-09-01", "2024-09-11") === 10);
 check("storyAddDays roll",
   storyAddDays("2024-09-01", 0) === "1 Sep 2024" &&
   storyAddDays("2024-09-01", 10) === "11 Sep 2024");
+
+// --- phase 7b fix: caption lookup is a pure function of master time ---
+const augStart = b[4].start; // scene 5 (august) starts here on the master
+check("caption lookup finds the first scene-5 caption",
+  (() => { const f = captionAtTime(scenes, augStart + 1.0);
+    return f.scene === 4 && f.caption === 0; })());
+check("caption lookup gap just after a scene-5 seek",
+  (() => { const f = captionAtTime(scenes, augStart + 0.3);
+    return f.scene === 4 && f.caption === -1; })());
+check("caption lookup gap between the scene-5 captions",
+  (() => { const f = captionAtTime(scenes, augStart + 5.0);
+    return f.scene === 4 && f.caption === -1; })());
+check("caption lookup finds the second scene-5 caption",
+  (() => { const f = captionAtTime(scenes, augStart + 6.0);
+    return f.scene === 4 && f.caption === 1; })());
+check("caption lookup finds the scene-3 caption",
+  (() => { const f = captionAtTime(scenes, b[2].start + 1.0);
+    return f.scene === 2 && f.caption === 0; })());
+check("planted: a scene-5 gap is never scene-3's window",
+  (() => { const f = captionAtTime(scenes, augStart + 0.3);
+    return !(f.scene === 2 && f.caption === 0); })());
+check("planted: off-by-window lookup is caught",
+  (() => { const f = captionAtTime(scenes, augStart + 5.0);
+    return f.caption !== 0; })());
+check("caption window edges are [at, at+hold)",
+  captionIndexAtLocalTime([{ at: 0.5, hold: 4.5 }], 0.5) === 0 &&
+  captionIndexAtLocalTime([{ at: 0.5, hold: 4.5 }], 4.999) === 0 &&
+  captionIndexAtLocalTime([{ at: 0.5, hold: 4.5 }], 5.0) === -1 &&
+  captionIndexAtLocalTime([{ at: 0.5, hold: 4.5 }], 0.3) === -1);
+
+// --- phase 7b fix: scene-6 orbit rate (20 deg over STORY_SCENE6_ORBIT) ---
+check("orbit bearing is 10 deg at 3 s",
+  storyOrbitBearing(20, story.STORY_SCENE6_ORBIT, 3) === 10);
+check("orbit bearing is 20 deg at 6 s",
+  storyOrbitBearing(20, story.STORY_SCENE6_ORBIT, 6) === 20);
+check("orbit bearing holds 20 deg after 6 s",
+  storyOrbitBearing(20, story.STORY_SCENE6_ORBIT, 11) === 20);
+check("orbit bearing starts at 0",
+  storyOrbitBearing(20, story.STORY_SCENE6_ORBIT, 0) === 0);
 
 if (failures) {
   console.log(`test_story: FAIL (${failures} failure(s))`);

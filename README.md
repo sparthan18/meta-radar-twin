@@ -71,7 +71,7 @@ Validation: the pipeline reproduces an independent implementation of SPEC.md to 
 
 ## Web map (`web/`)
 
-The page opens in **Story mode**: a nine-scene piece that plays on the page itself (camera, captions, a headline card per month, the ending), directed by `web/story.js` on a GSAP timeline, scrubbable by chapter, keyboard-operable (Space, arrows, Home/End, Escape) and captioned by default. **Explore mode** is the dashboard below, one click away at the same month. Every scene reads only its bound month; the scene specification is `docs/story-spec.md`. Phases 7a–7d build it up; 7a has the director, scenes 4 and 9 complete and the rest as captioned placeholders.
+The page opens in **Story mode**: a nine-scene piece that plays on the page itself (camera, captions, a headline card per month, the ending), directed by `web/story.js` on a GSAP timeline, scrubbable by chapter, keyboard-operable (Space, arrows, Home/End, Escape) and captioned by default. **Explore mode** is the dashboard below, one click away at the same month. Every scene reads only its bound month; the scene specification is `docs/story-spec.md`. Phases 7a–7d build it up: 7a the director with scenes 4 and 9; 7b the camera choreography, the SVG annotation layer (`web/annotate.js`: leader lines, counters, labels), the history strip, the bridge side view and the plain-language Explore (worry scale, labels with the technical term as a tooltip, engineers' details folded away), with scenes 3, 5 and 6.
 
 Phases 5a to 5d. Export once, then serve the static page locally:
 

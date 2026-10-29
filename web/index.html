@@ -84,6 +84,8 @@ main { display: flex; min-height: calc(100vh - 148px); }
   font-size: 12.5px; color: var(--muted); }
 .legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px;
   margin-right: 5px; vertical-align: -1px; }
+.legend .worry small { display: block; margin-left: 17px; font-size: 11px;
+  color: var(--muted); }
 h2 { font-size: 14px; margin: 12px 0 6px; }
 #ranking { list-style: none; margin: 0; padding: 0; }
 #ranking li { margin: 0 0 4px; padding: 0; border: 0; background: none; }
@@ -154,6 +156,20 @@ h2 { font-size: 14px; margin: 12px 0 6px; }
 .owner-block blockquote { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
   border-top: 1px solid var(--border); }
+.plain-reason { font-size: 13.5px; margin: 6px 0; }
+.memo-link { margin: 6px 0; }
+.memo-link button { border: 1px solid var(--border); background: var(--card);
+  color: var(--text); border-radius: 4px; padding: 4px 10px; cursor: pointer;
+  font-size: 13px; }
+details.eng { border: 1px solid var(--border); border-radius: 5px;
+  padding: 6px 9px; margin: 8px 0; }
+details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.sideview { margin: 8px 0; }
+.sideview h4 { margin: 6px 0 2px; font-size: 12.5px; color: var(--muted);
+  font-weight: 600; }
+.sideview svg { width: 100%; height: auto; display: block;
+  background: var(--card); border: 1px solid var(--border); border-radius: 5px; }
+.deck-note { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
 </style>
 </head>
 <body data-mode="story">
@@ -178,16 +194,16 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
       <button id="btnCC" type="button" class="active" aria-pressed="true" title="Toggle captions">CC</button>
     </div>
     <div id="headline" aria-live="polite"></div>
-    <div id="historyStrip" hidden>History strip (phase 7b): one row per bridge, one cell per month.</div>
+    <div id="historyStrip" hidden aria-label="History strip: risk per bridge per month"></div>
     <div class="basemap-toggle" role="group" aria-label="Basemap">
       <button id="btnImagery" type="button" aria-pressed="false">Imagery</button>
       <button id="btnDark" class="active" type="button" aria-pressed="true">Dark</button>
     </div>
     <div class="basemap-toggle" role="group" aria-label="Layers">
-      <button id="btnScatter" type="button" aria-pressed="false" title="3,694 EGMS points coloured by cutoff velocity">Scatterers</button>
-      <button id="btnSam" type="button" aria-pressed="false" title="SAM 3.1 bridge outlines near Carolabrücke">SAM</button>
-      <button id="btnRadar" type="button" aria-pressed="false" title="Sentinel-1 amplitude chip around Carolabrücke">Radar</button>
-      <button id="btnMemo" type="button" aria-expanded="false" disabled title="no memo for this month">Memo</button>
+      <button id="btnScatter" type="button" aria-pressed="false" title="Scatterers: 3,694 EGMS points coloured by cutoff velocity">Tracked points</button>
+      <button id="btnSam" type="button" aria-pressed="false" title="SAM 3.1 bridge outlines near Carolabrücke">AI outline (SAM)</button>
+      <button id="btnRadar" type="button" aria-pressed="false" title="Sentinel-1 amplitude chip around Carolabrücke">Satellite view (radar)</button>
+      <button id="btnMemo" type="button" aria-expanded="false" disabled title="no memo for this month">Report (memo)</button>
     </div>
     <div class="basemap-toggle" role="group" aria-label="Mode">
       <button id="btnExploreStory" type="button">Explore this month</button>
@@ -221,13 +237,18 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
       </div>
     </div>
     <div id="hoverLabel" hidden></div>
+    <div id="sceneSideView" hidden aria-label="Bridge side view">
+      <h3 id="sceneSideTitle">Carolabrücke — side view</h3>
+      <svg id="sceneSideSvg" role="img" aria-label="Side view of the bridge deck"></svg>
+      <p id="sceneSideNote" class="deck-note"></p>
+    </div>
   </div>
   <aside id="side">
     <div class="legend" id="legend">
-      <span><span class="sw" style="background:#4b5563"></span>none</span>
-      <span><span class="sw" style="background:#eab308"></span>watch</span>
-      <span><span class="sw" style="background:#f97316"></span>elevated</span>
-      <span><span class="sw" style="background:#ef4444"></span>high</span>
+      <span class="worry"><span class="sw" style="background:#4b5563"></span>fine <small>none</small></span>
+      <span class="worry"><span class="sw" style="background:#eab308"></span>keep watching <small>watch</small></span>
+      <span class="worry"><span class="sw" style="background:#f97316"></span>look closer <small>elevated</small></span>
+      <span class="worry"><span class="sw" style="background:#ef4444"></span>send an inspector <small>high</small></span>
       <span><span class="sw" style="background:#9ca3af"></span>not monitored</span>
       <span>span dots: −4 (blue) … +4 (red) mm/yr vertical change</span>
       <span>scatterers: same ±4 scale, grey = no data at this month</span>
@@ -247,6 +268,7 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
   </aside>
 </main>
 <footer>Model: muse-spark-1.3 (5 votes per question) checked against a deterministic rubric. Owner condition is an external input shown only in its own block. Basemap: Esri World Imagery / Esri Canvas World Dark Gray.</footer>
+<script src="annotate.js"></script>
 <script src="memo.js"></script>
 <script>
 "use strict";
@@ -263,6 +285,7 @@ let spanPopup = null, scatPopup = null, samPopup = null;
 let SCAT = null, SCAT_V = {}, S1_COORDS = null;
 let MEMO_CUTOFFS = [], memoOpen = false, memoReq = 0;
 let CENTROIDS = {};
+let HISTORY_ORDER = [];
 let playing = false, playTimer = null;
 const REDUCED = (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || false;
 const DUR_BRIDGE = REDUCED ? 0 : 400;
@@ -392,6 +415,123 @@ function updateHeadline(cutoff) {
   }
   $("headline").innerHTML = `<span class="headline-title">${esc(title)}</span>` +
     (reason ? `<span class="headline-reason">${esc(reason)}</span>` : "");
+}
+
+// History strip (phase 7b): one row per bridge in HISTORY_ORDER (rank at
+// the last cutoff, not-monitored last), one column per month, cells
+// coloured by model risk. playheadIdx colours the playhead column; cells
+// after revealIdx stay empty (scene 4 passes the current month; Explore
+// passes the last month so the strip is always full).
+function historyRiskAt(monthIdx, bid) {
+  const cutoff = CUT[monthIdx];
+  if (!cutoff || !DEC[cutoff] || !DEC[cutoff][bid]) return "unknown";
+  const d = DEC[cutoff][bid];
+  if (!d.model) return "unknown";
+  return d.model.risk || "unknown";
+}
+
+function renderHistoryStrip(playheadIdx, revealIdx) {
+  const box = $("historyStrip");
+  if (!box || !CUT.length || !HISTORY_ORDER.length) return;
+  const ph = (playheadIdx === undefined || playheadIdx === null) ? cutoffIdx : playheadIdx;
+  const rv = (revealIdx === undefined || revealIdx === null) ? CUT.length - 1 : revealIdx;
+  const NS = "http://www.w3.org/2000/svg";
+  const labelW = 150, cellW = 13, cellH = 13, gap = 1, topH = 4;
+  const W = labelW + CUT.length * (cellW + gap);
+  const H = topH + HISTORY_ORDER.length * (cellH + gap);
+  while (box.firstChild) box.removeChild(box.firstChild);
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `History strip, ${HISTORY_ORDER.length} bridges by ${CUT.length} months`);
+  svg.classList.add("history-svg");
+  box.appendChild(svg);
+  const mk = (tag, attrs, parent) => {
+    const el = document.createElementNS(NS, tag);
+    for (const k of Object.keys(attrs || {})) el.setAttribute(k, attrs[k]);
+    (parent || svg).appendChild(el);
+    return el;
+  };
+  HISTORY_ORDER.forEach((bid, r) => {
+    const y = topH + r * (cellH + gap);
+    const name = ID2NAME[bid] || bid;
+    const lab = mk("text", { x: String(labelW - 6), y: String(y + 10),
+      "class": "history-label", "text-anchor": "end", "font-size": "11" });
+    lab.textContent = name.length > 24 ? name.slice(0, 23) + "…" : name;
+    const tip = document.createElementNS(NS, "title");
+    tip.textContent = name;
+    lab.appendChild(tip);
+    for (let m = 0; m < CUT.length; m++) {
+      const x = labelW + m * (cellW + gap);
+      const revealed = m <= rv;
+      const risk = revealed ? historyRiskAt(m, bid) : "future";
+      const fill = !revealed ? "transparent"
+        : (typeof riskColor === "function" ? riskColor(risk)
+          : (RISK_COLORS[risk] || RISK_COLORS.unknown));
+      const rect = mk("rect", { x: String(x), y: String(y), width: String(cellW),
+        height: String(cellH), "class": "history-cell" + (m === ph ? " is-playhead" : "") });
+      rect.setAttribute("fill", fill);
+      rect.dataset.month = String(m);
+      rect.dataset.bid = String(bid);
+      const ct = document.createElementNS(NS, "title");
+      ct.textContent = revealed ? `${name} — ${CUT[m]}: ${risk}`
+        : `${name} — ${CUT[m]}: not yet revealed`;
+      rect.appendChild(ct);
+      rect.style.cursor = revealed ? "pointer" : "default";
+      if (revealed) {
+        rect.addEventListener("click", () => historyStripClick(m));
+      }
+    }
+  });
+  // Playhead column outline.
+  const px = labelW + ph * (cellW + gap);
+  mk("rect", { x: String(px - 1), y: "0", width: String(cellW + 2),
+    height: String(H), "class": "history-playhead" });
+}
+
+function historyStripClick(monthIdx) {
+  const m = Math.max(0, Math.min(CUT.length - 1, Number(monthIdx)));
+  try {
+    if (document.body.dataset.mode === "story" &&
+        typeof StorySeekScene4Month === "function") {
+      StorySeekScene4Month(m);
+      return;
+    }
+  } catch (e) { /* fall through to Explore */ }
+  try {
+    if (playing) setPlaying(false);
+    cutoffIdx = m;
+    $("slider").value = String(cutoffIdx);
+    applyCutoff();
+  } catch (e) { /* ignore */ }
+}
+
+// Explore callouts (phase 7b): every model-high bridge gets a name label
+// with "inspect" and a leader line from its marker. Story mode owns the
+// annotation layer itself, so this only runs in Explore.
+function updateExploreCallouts(cutoff) {
+  try {
+    if (document.body.dataset.mode === "story") return;
+    if (typeof AnnotateSetCallouts !== "function") return;
+  } catch (e) { return; }
+  const table = DEC[cutoff] || {};
+  const list = [];
+  for (const bid of Object.keys(ID2NAME)) {
+    const d = table[bid];
+    if (!d || !d.model || d.model.risk !== "high") continue;
+    const c = CENTROIDS[bid];
+    if (!c) continue;
+    list.push({ id: `explore-${bid}`, lon: c[0], lat: c[1],
+      title: ID2NAME[bid] || bid, sub: "inspect" });
+  }
+  // Rank order, lowest rank first, so labels stack deterministically.
+  list.sort((a, b) => {
+    const da = table[a.id.slice(8)], db = table[b.id.slice(8)];
+    const ra = (da.rank === null || da.rank === undefined) ? 999 : da.rank;
+    const rb = (db.rank === null || db.rank === undefined) ? 999 : db.rank;
+    return ra - rb || String(a.title).localeCompare(String(b.title));
+  });
+  try { AnnotateSetCallouts(list); } catch (e) { /* ignore */ }
 }
 
 function setPlaying(on) {
@@ -634,6 +774,11 @@ function initMap() {
         .addTo(map);
     });
     map.getCanvas().style.cursor = "pointer";
+    try {
+      if (typeof AnnotateInit === "function") {
+        AnnotateInit(map, document.getElementById("map"));
+      }
+    } catch (e) { /* annotation layer is a nicety, never fatal */ }
     applyCutoff();
     if (!REDUCED) {
       try { map.easeTo({ center: [13.745, 51.057], zoom: 12, duration: 2000 }); } catch (e) {}
@@ -708,6 +853,16 @@ function applyCutoff() {
   renderDetail(cutoff, selectedId);
   updateMemoButton(cutoff);
   refreshMemoPanel(cutoff);
+  // Explore owns the strip (always full) and the high-bridge callouts;
+  // Story mode drives both itself per scene.
+  try {
+    if (document.body.dataset.mode !== "story") {
+      renderHistoryStrip(cutoffIdx, CUT.length - 1);
+      const hs = $("historyStrip");
+      if (hs) hs.removeAttribute("hidden");
+      updateExploreCallouts(cutoff);
+    }
+  } catch (e) { /* ignore */ }
 }
 
 function renderRanking(cutoff) {
@@ -842,6 +997,22 @@ function chartSVG(bid) {
   return s;
 }
 
+function plainReasonFor(d) {
+  const own = (d.reason && String(d.reason).trim()) ? String(d.reason).trim() : "";
+  if (own) return own;
+  try {
+    if (typeof reasonFromFlags === "function") return reasonFromFlags(d.flags || {});
+  } catch (e) { /* fall through to the local copy */ }
+  const f = d.flags || {};
+  if (f.escalate) return "Exceeds anything in its own record, concentrated at one end.";
+  if (f.outlier) return "Exceeds anything in its own record.";
+  if (f.accelerating && f.differential) return "Speeding up and moving unevenly along its length.";
+  if (f.differential) return "Moving unevenly along its length.";
+  if (f.accelerating) return "Speeding up compared with its longer-term behaviour.";
+  if (f.moving) return "Moving faster than the noise floor.";
+  return "";
+}
+
 function renderDetail(cutoff, bid) {
   const box = $("detail");
   const name = ID2NAME[bid];
@@ -854,13 +1025,13 @@ function renderDetail(cutoff, bid) {
   const nSpan = (SPANS[bid] || []).length;
   if (d.model === null || d.model === undefined) {
     box.innerHTML = `<h3>${esc(name)}</h3>
-      <p class="notmon">not monitored by radar — ${esc(d.reason || props.reason || "")}</p>
+      <p class="plain-reason">Not monitored by radar — ${esc(d.reason || props.reason || "")}</p>
       <dl class="stat-grid">
-        <dt>scatterers</dt><dd>${props.n ?? "—"}</dd>
-        <dt>tracks</dt><dd>${props.tracks ?? "—"}</dd>
+        <dt title="scatterers">points the satellite can track</dt><dd>${props.n ?? "—"}</dd>
+        <dt title="tracks">satellite passes</dt><dd>${props.tracks ?? "—"}</dd>
         <dt>length</dt><dd>${props.len_m === null || props.len_m === undefined ? "—" : `≈ ${props.len_m} m`}</dd>
         <dt>points / ha</dt><dd>${fmt(props.points_per_ha, 1)}</dd>
-        <dt>radar coverage</dt><dd>none</dd>
+        <dt title="radar coverage">how well the satellite sees it</dt><dd>none</dd>
       </dl>
       <p class="notmon">Radar sees too little of this structure to rank it; it needs another inspection method. This is not a sign it is safe.</p>`;
     return;
@@ -876,22 +1047,35 @@ function renderDetail(cutoff, bid) {
       `<div>grade: <strong>${esc(owner.condition)}</strong></div>` +
       `<blockquote>${esc(owner.source)}</blockquote></div>`
     : "";
+  const reason = plainReasonFor(d);
+  const reasonHtml = reason ? `<p class="plain-reason">${esc(reason)}</p>` : "";
+  const memoHtml = hasMemo(cutoff)
+    ? `<p class="memo-link"><button type="button" id="detailMemoBtn">Read the inspection memo for ${esc(monthName(cutoff))}</button></p>`
+    : "";
   box.innerHTML = `<h3>${esc(name)}</h3>
+    ${reasonHtml}
+    ${memoHtml}
     <dl class="stat-grid">
-      <dt>scatterers</dt><dd>${props.n ?? "—"}</dd>
-      <dt>tracks</dt><dd>${props.tracks ?? "—"}</dd>
+      <dt title="scatterers">points the satellite can track</dt><dd>${props.n ?? "—"}</dd>
+      <dt title="tracks">satellite passes</dt><dd>${props.tracks ?? "—"}</dd>
       <dt>city rank</dt><dd>${d.rank} of 19</dd>
       <dt>score</dt><dd>${fmt(d.score, 3)} mm/yr</dd>
-      <dt>wmax</dt><dd>${fmt(d.wmax, 3)} mm/yr</dd>
-      <dt>wspread</dt><dd>${fmt(d.wspread, 3)} mm/yr</dd>
-      <dt>z (own history)</dt><dd>${fmt(d.z, 2)}</dd>
       <dt>long-term vel.</dt><dd>${fmt(d.vel, 2)} mm/yr</dd>
-      <dt>escalations 12m</dt><dd>${d.escalations_12m}</dd>
-      <dt>months since esc.</dt><dd>${esc(mse)}</dd>
-      <dt>radar coverage</dt><dd>${esc(d.radar_coverage)}</dd>
-      <dt>spans</dt><dd>${nSpan}</dd>
+      <dt title="escalations 12m">times it set off the alarm this year</dt><dd>${d.escalations_12m}</dd>
+      <dt title="months since esc.">months since the last alarm</dt><dd>${esc(mse)}</dd>
+      <dt title="radar coverage">how well the satellite sees it</dt><dd>${esc(d.radar_coverage)}</dd>
+      <dt title="spans">sections</dt><dd>${nSpan}</dd>
     </dl>
     <div class="flags">${flags}</div>
+    <div class="sideview"><h4>Bridge side view</h4>` +
+    `<svg id="sideViewSvg" role="img" aria-label="Side view of ${esc(name)}"></svg>` +
+    `<p class="deck-note" id="sideViewNote"></p></div>
+    <details class="eng"><summary>Details for engineers</summary>
+    <dl class="stat-grid">
+      <dt title="wmax">biggest section movement</dt><dd>${fmt(d.wmax, 3)} mm/yr</dd>
+      <dt title="wspread">how unevenly the sections move</dt><dd>${fmt(d.wspread, 3)} mm/yr</dd>
+      <dt title="z (own history)">compared with this bridge's own past</dt><dd>${fmt(d.z, 2)}</dd>
+    </dl>
     <div class="vs">
       <div class="col"><h4>Model (Muse Spark)</h4>
         <div>${esc(m.pattern)} <span class="pill ${esc(m.risk)}">${esc(m.risk)}</span></div>
@@ -905,7 +1089,28 @@ function renderDetail(cutoff, bid) {
     </div>
     <h4 style="margin:6px 0 2px;font-size:12.5px;color:var(--muted)">Per-span anomaly to ${esc(cutoff)} (mm/yr, + up)</h4>
     ${chartSVG(bid)}
+    </details>
     ${ownerHtml}`;
+  const mb = $("detailMemoBtn");
+  if (mb) mb.onclick = () => {
+    if (!hasMemo(CUT[cutoffIdx])) return;
+    memoOpen = true;
+    $("memoPanel").hidden = false;
+    updateMemoButton(CUT[cutoffIdx]);
+    refreshMemoPanel(CUT[cutoffIdx]);
+    $("btnMemoClose").focus();
+  };
+  try {
+    if (typeof AnnotateRenderSideView === "function") {
+      const svg = $("sideViewSvg");
+      const geo = AnnotateRenderSideView(svg, SPANS[bid] || [], cutoffIdx,
+        props.len_m, {});
+      const note = $("sideViewNote");
+      if (note && geo) {
+        note.textContent = `Sections displaced by this month's movement. Vertical ×${geo.factor.toFixed(1)}. Grey = no data.`;
+      }
+    }
+  } catch (e) { /* side view is a nicety, never fatal */ }
 }
 
 function selectBridge(bid, opts) {
@@ -969,6 +1174,22 @@ async function boot() {
     ID2NAME[String(p.id)] = p.name; NAME2ID[p.name] = String(p.id);
     BRIDGE_PROPS[String(p.id)] = p;
   }
+  // History row order: rank at the last cutoff, not-monitored last.
+  try {
+    const last = CUT[CUT.length - 1];
+    const table = DEC[last] || {};
+    if (typeof orderBridgesByRank === "function") {
+      HISTORY_ORDER = orderBridgesByRank(table, ID2NAME);
+    } else {
+      HISTORY_ORDER = Object.keys(ID2NAME).sort((a, b) => {
+        const da = table[a], db = table[b];
+        const ra = (!da || da.rank === null || da.rank === undefined) ? 999 : da.rank;
+        const rb = (!db || db.rank === null || db.rank === undefined) ? 999 : db.rank;
+        if (ra !== rb) return ra - rb;
+        return String(ID2NAME[a]).localeCompare(String(ID2NAME[b]));
+      });
+    }
+  } catch (e) { HISTORY_ORDER = Object.keys(ID2NAME).sort(); }
   if (!ID2NAME[selectedId]) selectedId = Object.keys(ID2NAME).sort()[0];
   cutoffIdx = CUT.length - 1;
   const slider = $("slider");
@@ -995,6 +1216,7 @@ async function boot() {
     document.body.dataset.mode = "explore";
     const landing = document.getElementById("storyLanding");
     if (landing) landing.setAttribute("hidden", "");
+    applyCutoff();
   }
 }
 boot().catch((e) => {

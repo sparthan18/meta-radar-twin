@@ -10,7 +10,8 @@ body[data-mode="explore"] #btnExploreStory,
 body[data-mode="explore"] #btnCC { display: none; }
 body[data-mode="story"] #btnMemo { display: none; } /* its panel lives in the hidden side */
 body[data-mode="story"] #btnWatchStory { display: none; }
-body[data-mode="explore"] #historyStrip { display: none; }
+body[data-mode="story"] #historyStrip[hidden],
+body[data-mode="explore"] #historyStrip[hidden] { display: none; }
 
 /* ---------- Headline card (replaces the phase-5e ticker) ---------- */
 #headline {
@@ -25,15 +26,24 @@ body[data-mode="explore"] #historyStrip { display: none; }
 #headline .headline-reason { color: var(--muted); font-size: 12.5px; display: block; }
 #headline.story-hide { visibility: hidden; } /* keeps its space in Story */
 
-/* History strip placeholder (phase 7b builds the real strip). */
+/* History strip (phase 7b): SVG grid, one row per bridge, one column
+   per month. Scrolls horizontally on narrow screens and vertically past
+   20 rows. */
 #historyStrip {
   flex: 0 0 100%;
-  font-size: 12.5px;
-  color: var(--muted);
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 5px 10px;
+  padding: 6px 8px;
+  background: var(--card);
+  overflow: auto;
+  max-height: 190px;
 }
+#historyStrip .history-svg { display: block; min-width: 560px; }
+#historyStrip .history-label { fill: var(--text); font-size: 11px; }
+#historyStrip .history-cell { stroke: var(--card); stroke-width: 0.5; }
+#historyStrip .history-cell.is-playhead { stroke: var(--accent); stroke-width: 1.5; }
+#historyStrip .history-playhead { fill: none; stroke: var(--accent);
+  stroke-width: 1.5; opacity: 0.8; pointer-events: none; }
 
 /* ---------- Scrub bar ---------- */
 #scrubWrap { position: relative; flex: 1; min-width: 160px; padding-bottom: 12px; }
@@ -213,6 +223,45 @@ body.story-reduced #caption.show { transform: translateX(-50%); }
 }
 #hoverLabel[hidden] { display: none; }
 
+/* ---------- Annotation layer (phase 7b) ---------- */
+.annotate-svg {
+  position: absolute; inset: 0; z-index: 12;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+.annotate-line { stroke: #fff; stroke-width: 1.8; opacity: 0.95; }
+.annotate-dot { fill: #fff; stroke: rgba(10, 14, 20, 0.8); stroke-width: 1; }
+.annotate-box { fill: rgba(10, 14, 20, 0.85); stroke: var(--border); }
+.annotate-title { fill: #fff; font-size: 12.5px; font-weight: 600; }
+.annotate-sub { fill: #cfd8e3; font-size: 12px; }
+.annotate-counter {
+  fill: #fff; font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke; stroke: rgba(10, 14, 20, 0.85); stroke-width: 4px;
+}
+
+/* ---------- Scene side view (phases 7b, scenes 5-6) ---------- */
+#sceneSideView {
+  position: absolute; top: 12px; right: 12px; z-index: 13;
+  width: min(340px, 42%);
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px 8px;
+}
+#sceneSideView[hidden] { display: none; }
+#sceneSideView h3 { margin: 0 0 4px; font-size: 14px; }
+#sceneSideSvg { width: 100%; height: auto; display: block; }
+#sceneSideView .deck-note { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+
+/* ---------- Deck blocks (detail panel + scene side view) ---------- */
+.deck-ground { stroke: var(--muted); stroke-width: 1; opacity: 0.7; }
+.deck-baseline { stroke: var(--text); stroke-width: 1.2; opacity: 0.85; }
+.deck-pillar { fill: var(--muted); opacity: 0.55; }
+.deck-block { stroke: rgba(10, 14, 20, 0.55); stroke-width: 0.8; }
+.deck-block.is-null { stroke-dasharray: 3, 2; }
+.deck-factor { fill: var(--muted); font-size: 11px; }
+body.story-reduced .annotate-line { transition: none; }
+
 #btnCC.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 /* ---------- Phone (<= 700 px) ---------- */
@@ -239,4 +288,11 @@ body.story-reduced #caption.show { transform: translateX(-50%); }
   }
   .chapter { width: 18px; margin-left: -9px; height: 40px; }
   #btnCC, #btnExploreStory, #btnWatchStory { min-height: 40px; }
+  #sceneSideView {
+    top: auto; bottom: 52px; right: 8px; left: 8px; width: auto;
+  }
+  #historyStrip { max-height: 150px; }
+  .annotate-title { font-size: 11.5px; }
+  .annotate-sub { font-size: 11px; }
+  .annotate-counter { font-size: 13px; }
 }

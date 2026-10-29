@@ -42,12 +42,16 @@ const STORY_SCENE_NAMES = {
   "ten-days-later": "Ten days later"
 };
 
-// Scenes 4 and 9 are complete in 7a; the rest are placeholders that show
-// the right cutoff, camera target, layer state and captions plus a tag.
+// Scenes 3, 4, 5, 6 and 9 are complete in 7b; the rest are placeholders
+// that show the right cutoff, camera target, layer state and captions.
 const STORY_PLACEHOLDERS = {
-  "title": true, "how-radar-sees": true, "twenty-bridges": true,
-  "august": true, "september": true, "the-report": true, "the-proof": true
+  "title": true, "how-radar-sees": true,
+  "the-report": true, "the-proof": true
 };
+const STORY_SCENE3_FLY = 2.0; // seconds of camera pull-back before light-up
+const STORY_SCENE3_GAP = 0.25; // seconds between bridge light-ups
+const STORY_SCENE6_ORBIT = 6.0; // seconds for the 20° orbit
+const STORY_GLOW_PULSE = 1.2; // seconds for the one glow pulse
 
 function storyMonthLabel(cutoff) {
   const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(cutoff || "");
@@ -148,6 +152,31 @@ function highCount(table) {
     if (d && d.model && d.model.risk === "high") n++;
   }
   return n;
+}
+
+// Rank order at one cutoff: rank ascending, null/undefined ranks
+// (not-monitored) last, ties by bridge name. Used for the scene-3
+// light-up (first cutoff) and the history-strip rows (last cutoff).
+function orderBridgesByRank(table, id2name) {
+  const bids = Object.keys(table || {});
+  bids.sort((a, b) => {
+    const da = table[a], db = table[b];
+    const ra = (!da || da.rank === null || da.rank === undefined) ? 999 : da.rank;
+    const rb = (!db || db.rank === null || db.rank === undefined) ? 999 : db.rank;
+    if (ra !== rb) return ra - rb;
+    const na = (id2name && id2name[a]) || a;
+    const nb = (id2name && id2name[b]) || b;
+    return String(na).localeCompare(String(nb));
+  });
+  return bids;
+}
+
+// How many scene-3 bridges are lit at local time localT (0..order.length).
+// The camera flies for STORY_SCENE3_FLY seconds, then one bridge every
+// STORY_SCENE3_GAP seconds in rank order.
+function scene3LitCount(localT, total) {
+  if (localT < STORY_SCENE3_FLY) return 0;
+  return Math.max(0, Math.min(total, Math.floor((localT - STORY_SCENE3_FLY) / STORY_SCENE3_GAP) + 1));
 }
 
 // First month (and bridge) any bridge reaches each level, in level order.
@@ -295,6 +324,42 @@ function sceneIndexAtTime(scenes, t) {
   return scenes.length - 1;
 }
 
+// Caption window lookup: the index of the caption whose [at, at+hold]
+// window contains the scene-local time, or -1 in a gap. Pure.
+function captionIndexAtLocalTime(captions, localT) {
+  const arr = captions || [];
+  for (let k = 0; k < arr.length; k++) {
+    const c = arr[k] || {};
+    if (typeof c.at !== "number" || typeof c.hold !== "number") continue;
+    if (localT >= c.at && localT < c.at + c.hold) return k;
+  }
+  return -1;
+}
+
+// Caption state as a pure function of the master time: the owning scene
+// (the same sceneIndexAtTime lookup the scrub bar and the scene tag use)
+// and the caption index inside it (-1 when no window holds the playhead,
+// so a seek into a gap never keeps another scene's caption).
+function captionAtTime(scenes, t) {
+  const arr = scenes || [];
+  if (!arr.length) return { scene: -1, caption: -1 };
+  const i = sceneIndexAtTime(arr, t);
+  const bounds = sceneBounds(arr);
+  const localT = t - bounds[i].start;
+  const caps = (arr[i] && arr[i].captions) || [];
+  return { scene: i, caption: captionIndexAtLocalTime(caps, localT) };
+}
+
+// Linear camera orbit: totalDeg over spanSec from the scene start,
+// holding the end value afterwards. Scene 6 runs 20 deg over
+// STORY_SCENE6_ORBIT (6 s): 10 deg at 3 s, 20 deg from 6 s on.
+function storyOrbitBearing(totalDeg, spanSec, localT) {
+  const span = Number(spanSec);
+  if (!(span > 0)) return 0;
+  const frac = Math.max(0, Math.min(1, Number(localT) / span));
+  return (Number(totalDeg) || 0) * frac;
+}
+
 // Scene-4 replay guard: a month beyond the revealed position may only be
 // bound through the sanctioned advance (forward stepping or an explicit
 // seek), never by a stale async continuation.
@@ -352,6 +417,10 @@ let storyHitsFired = {};
 let storyCalloutTimers = [];
 let storyCcOn = true;
 let storyEls = {};
+let storyScene3Order = [];
+let storyScene3Lit = -1;
+let storyS4Callouts = [];
+let storyGlowPulsed = "";
 
 function storyHasGsap() {
   return (typeof gsap !== "undefined") && gsap !== null;
@@ -493,8 +562,10 @@ function storyApplyCamera(sc, cut) {
       return;
     }
     if (c.mode === "step") {
-      // One step: hold position. The orbit is a function of the playhead
-      // in storySyncCamera so seeks scrub it; nothing to start here.
+      // One step: hold position and reset the bearing. The scene-6 orbit
+      // tween on the sub-timeline (plus the playhead sync) drives the
+      // bearing from here, so every entry starts from a known 0.
+      try { if (map.jumpTo) map.jumpTo({ bearing: 0 }); } catch (e) { /* ignore */ }
       return;
     }
     const CITY = [13.745, 51.057];
@@ -527,6 +598,8 @@ function storyApplyCamera(sc, cut) {
       map.jumpTo({ center, zoom, pitch, bearing: 0 });
     } else if (c.mode === "bridge" || c.mode === "pullback") {
       map.flyTo({ center, zoom, pitch, bearing: 0, duration: 2000 });
+    } else if (sc && sc.id === "twenty-bridges") {
+      map.easeTo({ center, zoom, pitch, bearing: 0, duration: 2000 });
     } else {
       map.easeTo({ center, zoom, pitch, bearing: 0, duration: 1800 });
     }
@@ -543,6 +616,105 @@ function storyApplyLayers(sc) {
       setLayerVisible("btnScatter", "scatterers-circles", !!L.scatterers);
     }
   } catch (e) { /* ignore */ }
+}
+
+function storyCarolaId() {
+  try {
+    if (typeof NAME2ID !== "undefined" && NAME2ID) {
+      return NAME2ID["Carolabrücke"] || null;
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+// Span callout for scenes 5-6: the fastest span at monthIdx with its
+// value ("+3.2 mm/yr" style). Reads only the bound month's anomaly.
+function storySpanCallout(bid, monthIdx, calloutId) {
+  try {
+    if (typeof SPANS === "undefined" || !SPANS) return null;
+    if (typeof fastestSpan !== "function") return null;
+    const arr = SPANS[bid] || [];
+    const best = fastestSpan(arr, monthIdx);
+    if (!best) return null;
+    let val = "no data";
+    try {
+      if (typeof formatSpanValue === "function") val = formatSpanValue(best.value);
+    } catch (e) { /* keep fallback */ }
+    let name = bid;
+    try { if (typeof ID2NAME !== "undefined" && ID2NAME) name = ID2NAME[bid] || bid; } catch (e) { /* ignore */ }
+    return { id: calloutId, lon: best.lon, lat: best.lat,
+      title: `${name} span ${best.span}`, sub: String(val) };
+  } catch (e) { return null; }
+}
+
+// Scene 5-6 side view: render Carolabrücke's deck at monthIdx into the
+// slide-in panel beside the map. Slides in with GSAP (appears under
+// reduced motion); the deck itself rises via AnnotateRenderSideView.
+function storyShowSideView(monthIdx) {
+  const panel = storyEl("sceneSideView");
+  const svg = storyEl("sceneSideSvg");
+  if (!panel || !svg) return;
+  const bid = storyCarolaId();
+  try {
+    if (typeof AnnotateRenderSideView === "function" && bid &&
+        typeof SPANS !== "undefined" && SPANS) {
+      let lenM = null;
+      try {
+        if (typeof BRIDGE_PROPS !== "undefined" && BRIDGE_PROPS && BRIDGE_PROPS[bid]) {
+          lenM = BRIDGE_PROPS[bid].len_m;
+        }
+      } catch (e) { /* ignore */ }
+      const geo = AnnotateRenderSideView(svg, SPANS[bid] || [], monthIdx, lenM, {});
+      const note = storyEl("sceneSideNote");
+      if (note && geo) {
+        note.textContent = `Sections displaced by this month's movement. Vertical ×${geo.factor.toFixed(1)}.`;
+      }
+    }
+  } catch (e) { /* panel still shows */ }
+  const wasHidden = panel.hasAttribute("hidden");
+  storyShow(panel, true);
+  if (wasHidden && !storyReduced() && storyHasGsap()) {
+    try {
+      gsap.from(panel, { x: "100%", opacity: 0, duration: 0.6, ease: "power2.out" });
+    } catch (e) { /* ignore */ }
+  }
+}
+
+function storyHideSideView() {
+  storyShow(storyEl("sceneSideView"), false);
+}
+
+// Scene-6 glow pulse: one 1.2 s radius/opacity tween on the glow layer,
+// then static. Only Carolabrücke glows at the last cutoff (the only high
+// bridge), so the layer-wide tween reads as one marker pulsing. Static
+// under reduced motion.
+function storyGlowPulseOnce(key) {
+  if (storyReduced()) return;
+  if (!storyHasGsap()) return;
+  if (storyGlowPulsed === key) return;
+  storyGlowPulsed = key;
+  try {
+    if (typeof map === "undefined" || !map) return;
+    if (!map.getLayer || !map.getLayer("bridges-glow")) return;
+    const state = { t: 0 };
+    gsap.to(state, { t: 1, duration: STORY_GLOW_PULSE / 2, ease: "sine.in",
+      yoyo: true, repeat: 1,
+      onUpdate: () => {
+        try {
+          map.setPaintProperty("bridges-glow", "circle-radius", 18 + 10 * state.t);
+          map.setPaintProperty("bridges-glow", "circle-opacity",
+            ["case", ["==", ["feature-state", "risk"], "high"], 0.25 + 0.35 * state.t, 0]);
+        } catch (e) { /* ignore */ }
+      },
+      onComplete: () => {
+        try {
+          map.setPaintProperty("bridges-glow", "circle-radius", 18);
+          map.setPaintProperty("bridges-glow", "circle-opacity",
+            ["case", ["==", ["feature-state", "risk"], "high"], 0.25, 0]);
+        } catch (e) { /* ignore */ }
+      }
+    });
+  } catch (e) { /* glow is decoration, never fatal */ }
 }
 
 function storyShow(el, on) {
@@ -574,6 +746,13 @@ function storyApplyOverlays(i) {
   storyShow(storyEl("sceneCover"), !!(sc.layers && sc.layers.cover));
   storyShow(storyEl("sceneDim"), !!(sc.layers && sc.layers.dim));
   storyShow(storyEl("historyStrip"), sc.id === "three-years");
+  if (sc.id === "august" || sc.id === "september") {
+    try {
+      storyShowSideView(storyCutoffIndexOf(sc.cutoff));
+    } catch (e) { /* ignore */ }
+  } else {
+    storyHideSideView();
+  }
   const headline = storyEl("headline");
   if (headline) {
     // The headline card belongs to Explore and to scene 4; during the
@@ -611,6 +790,64 @@ function storyApplySceneState(i) {
   storyApplyOverlays(i);
   if (sc.id !== "three-years") {
     storyBindCutoffIndex(storyCutoffIndexOf(sc.cutoff), true);
+  }
+  // Scene 3: rank order at the first cutoff (not-monitored last); the
+  // per-update sync lights bridges up from this list.
+  if (sc.id === "twenty-bridges") {
+    storyScene3Lit = -1;
+    try {
+      if (typeof CUT !== "undefined" && CUT && typeof DEC !== "undefined" && DEC) {
+        const table = DEC[CUT[0]] || {};
+        const names = (typeof ID2NAME !== "undefined") ? ID2NAME : {};
+        storyScene3Order = orderBridgesByRank(table, names);
+      } else {
+        storyScene3Order = [];
+      }
+    } catch (e) { storyScene3Order = []; }
+  }
+  // Scenes 5-6: the span callout reads only the bound month.
+  if (sc.id === "august" || sc.id === "september") {
+    try {
+      const bid = storyCarolaId();
+      const midx = storyCutoffIndexOf(sc.cutoff);
+      if (bid && typeof AnnotateSetCallouts === "function") {
+        const co = storySpanCallout(bid, midx,
+          sc.id === "august" ? "aug-span" : "sep-span");
+        if (co) {
+          if (sc.id === "september") {
+            // The counter starts at the bound month's values; the tween
+            // below counts it up from August.
+            try {
+              if (typeof CUT !== "undefined" && CUT && typeof DEC !== "undefined" && DEC) {
+                const table = DEC[CUT[midx]] || {};
+                const d = table[bid] || {};
+                const n = (typeof N_MONITORED !== "undefined") ? N_MONITORED : 19;
+                if (typeof formatRankCounter === "function") {
+                  co.counter = formatRankCounter(d.rank, n, d.z);
+                }
+              }
+            } catch (e) { /* counter set by the tween */ }
+          }
+          AnnotateSetCallouts([co]);
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+  // Scene 6: glow pulse once, then the rank/z counter from August.
+  if (sc.id === "september") {
+    try { storyGlowPulseOnce(`sep-${storyCutoffIndexOf(sc.cutoff)}`); } catch (e) { /* ignore */ }
+    try {
+      if (typeof AnnotateTweenCounter === "function" &&
+          typeof CUT !== "undefined" && CUT && typeof DEC !== "undefined" && DEC) {
+        const midx = storyCutoffIndexOf(sc.cutoff);
+        const prev = Math.max(0, midx - 1);
+        const bid = storyCarolaId();
+        const now = (DEC[CUT[midx]] || {})[bid] || {};
+        const was = (DEC[CUT[prev]] || {})[bid] || {};
+        const n = (typeof N_MONITORED !== "undefined") ? N_MONITORED : 19;
+        AnnotateTweenCounter("sep-span", was.rank, now.rank, n, was.z, now.z, 1.5);
+      }
+    } catch (e) { /* counter already shows the final value */ }
   }
   if (instant || !(sc.waitFor && sc.waitFor.length)) {
     storyApplyCamera(sc, true);
@@ -678,7 +915,12 @@ function storyShowCaption(text) {
 function storyHideCaption() {
   storyCaptionKey = "";
   const cap = storyEl("caption");
-  if (cap) cap.classList.remove("show");
+  if (cap) {
+    // Clear the text as well as hiding: a seek into a gap must never
+    // leave another scene's caption in the element.
+    cap.textContent = "";
+    cap.classList.remove("show");
+  }
 }
 
 function storyClearCallouts() {
@@ -686,26 +928,58 @@ function storyClearCallouts() {
     try { clearTimeout(t); } catch (e) { /* ignore */ }
   }
   storyCalloutTimers = [];
+  storyS4Callouts = [];
+  storyScene3Lit = -1;
   const box = storyEl("storyCallouts");
   if (box) box.innerHTML = "";
+  try {
+    if (typeof AnnotateClear === "function") AnnotateClear();
+  } catch (e) { /* ignore */ }
 }
 
+// Scene-4 first-yellow/orange/red callouts use the annotation layer (the
+// same component as the Explore high-bridge callouts): a name label with
+// a leader line from the bridge's marker, up for STORY_CALLOUT_HOLD.
 function storyShowCallout(hit) {
-  const box = storyEl("storyCallouts");
-  if (!box) return;
-  const div = document.createElement("div");
-  div.className = `story-callout level-${hit.level}`;
-  const dot = document.createElement("span");
-  dot.className = "dot";
-  dot.setAttribute("aria-hidden", "true");
-  const txt = document.createElement("span");
-  txt.textContent = `${hit.name} — ${hit.level}`;
-  div.appendChild(dot);
-  div.appendChild(txt);
-  box.appendChild(div);
   const live = storyEl("captionLive");
-  if (live) live.textContent = `${hit.name}, ${hit.level}`;
+  if (live) {
+    try { live.textContent = `${hit.name}, ${hit.level}`; } catch (e) { /* ignore */ }
+  }
+  let done = false;
   try {
+    if (typeof AnnotateSetCallouts === "function" &&
+        typeof CENTROIDS !== "undefined" && CENTROIDS) {
+      const c = CENTROIDS[hit.bid];
+      if (c) {
+        storyS4Callouts.push({ id: `s4-${hit.level}`, lon: c[0], lat: c[1],
+          title: hit.name, sub: hit.level });
+        AnnotateSetCallouts(storyS4Callouts.slice());
+        done = true;
+        storyCalloutTimers.push(setTimeout(() => {
+          try {
+            storyS4Callouts = storyS4Callouts.filter(
+              (co) => co.id !== `s4-${hit.level}`);
+            AnnotateSetCallouts(storyS4Callouts.slice());
+          } catch (e) { /* ignore */ }
+        }, STORY_CALLOUT_HOLD * 1000));
+      }
+    }
+  } catch (e) { done = false; }
+  if (done) return;
+  // Fallback when the annotation layer is unavailable: the phase-7a chip.
+  try {
+    const box = storyEl("storyCallouts");
+    if (!box) return;
+    const div = document.createElement("div");
+    div.className = `story-callout level-${hit.level}`;
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.setAttribute("aria-hidden", "true");
+    const txt = document.createElement("span");
+    txt.textContent = `${hit.name} — ${hit.level}`;
+    div.appendChild(dot);
+    div.appendChild(txt);
+    box.appendChild(div);
     storyCalloutTimers.push(setTimeout(() => {
       try { if (div.parentNode === box) box.removeChild(div); } catch (e) { /* ignore */ }
     }, STORY_CALLOUT_HOLD * 1000));
@@ -713,11 +987,15 @@ function storyShowCallout(hit) {
 }
 
 // Sanctioned scene-4 advance: reveal month m, bind it, and fire any
-// first-time callouts (suppressed while scrubbing).
+// first-time callouts (suppressed while scrubbing). The history strip
+// fills to the current month; cells after it stay empty.
 function storyStepMonth(m, quiet) {
   storyMonth = m;
   if (m > storyHighWater) storyHighWater = m;
   storyBindCutoffIndex(m, true);
+  try {
+    if (typeof renderHistoryStrip === "function") renderHistoryStrip(m, m);
+  } catch (e) { /* ignore */ }
   if (quiet) return;
   for (const hit of storyHits) {
     if (hit.monthIdx === m && !storyHitsFired[hit.level]) {
@@ -725,6 +1003,33 @@ function storyStepMonth(m, quiet) {
       storyShowCallout(hit);
     }
   }
+}
+
+// Scene-3 light-up as a function of the playhead: the first N bridges in
+// rank order get name labels (N from scene3LitCount). Labels fade in one
+// by one via the annotation layer and clear at the scene's end.
+function storySyncScene3(localT) {
+  try {
+    if (typeof AnnotateSetCallouts !== "function") return;
+    if (typeof CENTROIDS === "undefined" || !CENTROIDS) return;
+    const total = storyScene3Order.length;
+    if (!total) return;
+    const sc = storyScenes[storyScene];
+    const fadingOut = sc && localT > sc.duration - 1.0;
+    const n = fadingOut ? 0 : scene3LitCount(localT, total);
+    if (n === storyScene3Lit) return;
+    storyScene3Lit = n;
+    const names = (typeof ID2NAME !== "undefined") ? ID2NAME : {};
+    const list = [];
+    for (let k = 0; k < n; k++) {
+      const bid = storyScene3Order[k];
+      const c = CENTROIDS[bid];
+      if (!c) continue;
+      list.push({ id: `s3-${bid}`, lon: c[0], lat: c[1],
+        title: (names && names[bid]) || bid });
+    }
+    AnnotateSetCallouts(list);
+  } catch (e) { /* ignore */ }
 }
 
 function storySyncDateRoll(localT) {
@@ -754,8 +1059,8 @@ function storySyncEnding(show) {
 
 // Camera as a function of the playhead: scene 1 orbits at 0.5 deg/s
 // (bearing = 0.5 * localT, so 2 deg at 4 s and 4 deg at 8 s), scene 6
-// orbits its total over its duration, scene 4 drifts its centre. jumpTo
-// per update scrubs and survives seeks; skipped under reduced motion.
+// orbits 20° over 6 s, scene 4 drifts its centre. jumpTo per update
+// scrubs and survives seeks; skipped under reduced motion.
 function storySyncCamera(i, localT) {
   try {
     if (typeof map === "undefined" || !map) return;
@@ -765,8 +1070,10 @@ function storySyncCamera(i, localT) {
     if (!sc) return;
     const c = sc.camera || {};
     if (c.mode === "step" && c.orbit) {
-      const frac = Math.max(0, Math.min(1, localT / sc.duration));
-      const b = (c.orbit || 0) * frac;
+      // Same linear law as the scene-6 sub-timeline tween, so seeks land
+      // on the right bearing even when tween callbacks are suppressed.
+      const span = (sc.id === "september") ? STORY_SCENE6_ORBIT : sc.duration;
+      const b = storyOrbitBearing(c.orbit || 0, span, localT);
       try { if (map.jumpTo) map.jumpTo({ bearing: b }); } catch (e) { /* ignore */ }
     } else if (c.orbit) {
       const b = (c.orbit || 0) * Math.max(0, localT);
@@ -806,13 +1113,17 @@ function storySyncSceneTag(t) {
 }
 
 // Sync everything that is a function of the playhead: the camera orbit /
-// drift, the scene-4 month, the scene-9 date roll and ending panel, and
-// caption visibility. Runs on every master update, so playing and
+// drift, the scene-3 light-up, the scene-4 month, the scene-9 date roll
+// and ending panel. Captions sync separately from the master time in
+// storySyncCaption. Runs on every master update, so playing and
 // scrubbing share one path.
 function storySyncProgress(i, localT) {
   const sc = storyScenes[i];
   if (!sc) return;
   storySyncCamera(i, localT);
+  if (sc.id === "twenty-bridges") {
+    storySyncScene3(localT);
+  }
   if (sc.id === "three-years") {
     const m = storyMonthAtLocalTime(localT);
     if (m !== storyMonth) storyStepMonth(m, storyScrubbing);
@@ -822,20 +1133,26 @@ function storySyncProgress(i, localT) {
     storyShow(storyEl("dateRoll"), localT < STORY_END_AT);
     storySyncEnding(localT >= STORY_END_AT);
   }
-  let active = -1;
-  for (let k = 0; k < sc.captions.length; k++) {
-    const cap = sc.captions[k];
-    if (localT >= cap.at && localT < cap.at + cap.hold) { active = k; break; }
-  }
-  const key = active === -1 ? "" : `${i}:${active}`;
-  if (key !== storyCaptionKey) {
-    storyCaptionKey = key;
-    if (active === -1) {
+}
+
+// The caption as a function of the master time: the same playhead lookup
+// the scene tag uses, on every master update, so seeks, steps, chapter
+// clicks and natural transitions agree. A gap shows nothing, and hiding
+// clears the text, so another scene's caption is never left behind.
+function storySyncCaption(t) {
+  try {
+    if (!storyScenes.length) return;
+    const found = captionAtTime(storyScenes, t);
+    const key = found.caption === -1 ? "" : `${found.scene}:${found.caption}`;
+    if (key === storyCaptionKey) return;
+    if (found.caption === -1) {
       storyHideCaption();
-    } else {
-      storyShowCaption(captionText(sc.captions[active].text, storyCaptionData()));
+      return;
     }
-  }
+    storyCaptionKey = key;
+    const sc = storyScenes[found.scene];
+    storyShowCaption(captionText(sc.captions[found.caption].text, storyCaptionData()));
+  } catch (e) { /* ignore */ }
 }
 
 // One GSAP master timeline per run; each scene gets its own sub-timeline
@@ -849,6 +1166,9 @@ function storyBuildMaster() {
   storyRunToken++;
   storyHighWater = -1;
   storyHitsFired = {};
+  storyGlowPulsed = "";
+  storyScene3Order = [];
+  storyScene3Lit = -1;
   storyClearCallouts();
   storyHideCaption();
   storyMaster = gsap.timeline({ paused: true,
@@ -856,6 +1176,27 @@ function storyBuildMaster() {
   storyScenes.forEach((sc, i) => {
     const sub = gsap.timeline();
     sub.to({}, { duration: sc.duration, ease: "none" });
+    if (sc.id === "september" && !storyReduced() &&
+        sc.camera && sc.camera.orbit) {
+      // Scene-6 orbit: a tween on this sub-timeline from the bearing at
+      // scene start (0; storyApplyCamera resets it on entry) to +20 deg
+      // over STORY_SCENE6_ORBIT seconds. It scrubs with the master, holds
+      // 20 deg after 6 s, and is skipped under reduced motion.
+      const orbTarget = sc.camera.orbit || 20;
+      const orbSpan = Math.min(STORY_SCENE6_ORBIT, sc.duration);
+      const orb = { b: 0 };
+      sub.fromTo(orb, { b: 0 }, { b: orbTarget, duration: orbSpan,
+        ease: "none",
+        onUpdate: () => {
+          try {
+            if (storyReduced()) return;
+            if (storyMode() !== "story") return;
+            if (typeof map !== "undefined" && map && map.jumpTo) {
+              map.jumpTo({ bearing: orb.b });
+            }
+          } catch (e) { /* ignore */ }
+        } }, 0);
+    }
     storyMaster.add(sub, storyBounds[i].start);
     try { storyMaster.addLabel(sc.id, storyBounds[i].start); } catch (e) { /* ignore */ }
   });
@@ -871,6 +1212,7 @@ function storyOnMasterUpdate() {
     storyApplySceneState(i);
   }
   storySyncProgress(i, t - storyBounds[i].start);
+  storySyncCaption(t);
   storySyncScrubUI(t);
 }
 
@@ -974,6 +1316,9 @@ function storySeekTo(t) {
   const total = storyMaster.duration();
   const c = Math.max(0, Math.min(total - 0.001, t));
   try { storyMaster.time(c); } catch (e) { /* ignore */ }
+  // Sync explicitly while still scrubbing (quiet): seeks must land on
+  // correct state even if the timeline suppresses update callbacks.
+  try { storyOnMasterUpdate(); } catch (e) { /* ignore */ }
   storyScrubbing = false;
   try {
     if (storyState === "playing") storyMaster.play();
@@ -1054,8 +1399,11 @@ function storyHideOverlays() {
   storyShow(storyEl("sceneDim"), false);
   storyShow(storyEl("dateRoll"), false);
   storyShow(storyEl("storyEnd"), false);
-  storyShow(storyEl("historyStrip"), false);
   storyShow(storyEl("hoverLabel"), false);
+  storyHideSideView();
+  // The history strip belongs to Explore (always full) and to scene 4.
+  // Hide here; the Explore path re-renders it full via applyCutoff.
+  storyShow(storyEl("historyStrip"), false);
   const headline = storyEl("headline");
   if (headline) headline.classList.remove("story-hide");
 }
@@ -1071,6 +1419,7 @@ function storyResync() {
   try {
     storyApplySceneState(i);
     storySyncProgress(i, t - storyBounds[i].start);
+    storySyncCaption(t);
     storySyncScrubUI(t);
   } finally {
     storyScrubbing = false;
@@ -1251,6 +1600,7 @@ function storyInit() {
   storyMonth = -1;
   storyApplySceneState(0);
   storySyncProgress(0, 0);
+  storySyncCaption(0);
   storySyncScrubUI(0);
   storyShow(storyEl("sceneTitle"), false);
   storyShow(storyEl("sceneTag"), false);
@@ -1269,6 +1619,15 @@ function StoryBridgeClick(bid) {
   storySetMode("explore");
   try { if (typeof selectBridge === "function") selectBridge(bid); } catch (e) { /* ignore */ }
 }
+// History-strip click in Story mode: seek to scene 4 at that month.
+function StorySeekScene4Month(m) {
+  try {
+    if (!storyMaster || !storyBounds[3]) return;
+    const n = (typeof CUT !== "undefined" && CUT) ? CUT.length : 0;
+    const mm = Math.max(0, Math.min(n - 1, Number(m)));
+    storySeekTo(storyBounds[3].start + storyScene4Lead() + mm * STORY_MONTH_STEP + 0.01);
+  } catch (e) { /* ignore */ }
+}
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
   try {
@@ -1282,10 +1641,13 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     captionText, storyPluralize, storyMonthLabel, storyFmtEventDate,
     storyDaysBetween, storyAddDays, reasonFromFlags, headlineText,
-    topHighBridge, highCount, firstLevelHits, buildScenes, sceneBounds,
+    topHighBridge, highCount, orderBridgesByRank, scene3LitCount,
+    firstLevelHits, buildScenes, sceneBounds,
     totalDuration, sceneIndexAtTime, scene4Allowed, captionDataFor,
+    captionIndexAtLocalTime, captionAtTime, storyOrbitBearing,
     STORY_SCENE_NAMES, STORY_PLACEHOLDERS,
     STORY_MONTH_STEP, STORY_SCENE4_LEAD, STORY_SCENE4_TAIL,
-    STORY_WAIT_TIMEOUT, STORY_CALLOUT_HOLD, STORY_DATE_ROLL, STORY_END_AT
+    STORY_WAIT_TIMEOUT, STORY_CALLOUT_HOLD, STORY_DATE_ROLL, STORY_END_AT,
+    STORY_SCENE3_FLY, STORY_SCENE3_GAP, STORY_SCENE6_ORBIT, STORY_GLOW_PULSE
   };
 }

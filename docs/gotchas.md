@@ -170,6 +170,10 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 ### Muse cannot see the page, so leave visual checks to a person
 - **What you see:** asked to measure the slider width, Muse tried a local server (the sandbox refused to bind a port) and twice ran headless Brave, which produced no output. Each attempt needed a manual approval and took minutes.
 - **Fix:** have Muse prove layout by construction and list what needs a visual check; the reviewer clicks through the page in a real browser.
+### Muse may reach for tools the prompt never mentioned
+- **What you see:** mid-fix, Muse asks to run `jg` (the jevgrep code-search CLI installed on the machine). `jg` answers "how does this behave" questions by sending the question and repository excerpts to api.typesafe.ai. Muse's own reviewer flagged it: egress driven by a tool hint, not by the task.
+- **Fix:** decline, and say "use grep and read the files". Put "no jg/jevgrep or any tool that sends code to an external service" in the standing rules; a plain grep was enough every time.
+
 
 ## Web map
 
