@@ -450,8 +450,12 @@ bridge-ness. See docs/gotchas.md.
   {rank, score, wmax, wspread, z, vel, flags, escalations_12m, months_since_esc, radar_coverage,
   model:{pattern, risk, inspect, p_risk, p_high, p_inspect}, rubric:{pattern, risk, inspect},
   owner_condition_alert}}}, owner:{asset:{condition, source}}}`),
-  `scatterers.geojson` (points with v, t, c, id), `sam.geojson` (SAM box-prompt polygons with IoU
-  and bright fraction), and `memos/<cutoff>.md` for the cutoffs that have a memo. Every value for a
+  `scatterers.geojson` (points with id and track only), `scatterer_velocity.json` (per point, the
+  cutoff velocity at each of the 33 cutoffs from `out/scatterer_velocity.csv`, null below 24
+  epochs), `sam.geojson` (SAM box-prompt polygons with IoU and bright fraction),
+  `s1_amplitude.png` + `s1_amplitude.json` (the Sentinel-1 chip rendered by
+  `scripts/render_s1_chip.py` into `out/`, with its four lon/lat corners), and `memos/<cutoff>.md`
+  for the cutoffs that have a memo. Every value for a
   cutoff must come from data at or before that cutoff.
 - `scripts/sam_vs_osm.py` — §6.1.
 
@@ -485,9 +489,14 @@ only in its own labelled block in the detail panel.
 - **Scatterers:** the scatterer export carries no whole-period EGMS values.
 - **Not-monitored length:** taken from the minimum rotated rectangle and shown as approximate.
 
-**Phase 5c (layers, memo, polish):** city-zoom risk markers drawn above the span dots (5b left them underneath), SAM polygons with IoU and bright fraction, scatterer layer
-(hidden by default), Sentinel-1 amplitude toggle, memo panel for cutoffs with a memo, phone layout,
-accessibility pass. Deployment only after the owner approves the host; a live "Run audit" button
+**Phase 5c (layers):** city-zoom risk markers drawn above the span dots (5b left them underneath);
+scatterer layer (hidden by default) coloured by each point's cutoff velocity at the selected month,
+never a whole-period value; SAM polygons with IoU; Sentinel-1 amplitude chip toggle (a 930 m chip
+around Carolabrücke, rendered from `data/` into `out/` by a script, since the exporter reads `out/`
+only).
+
+**Phase 5d (memo, polish):** memo panel for cutoffs with a memo ("no memo for this month"
+otherwise), phone layout, accessibility pass. Deployment only after the owner approves the host; a live "Run audit" button
 needs a hosted service and stays out unless approved.
 
 ## 10. Event-week order (rubric-weighted)

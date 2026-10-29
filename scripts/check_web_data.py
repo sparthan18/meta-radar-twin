@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate web/data against SPEC section 8 (phase 5a).
+"""Validate web/data against SPEC section 8 (phase 5c).
 
 Checks: every bridge in decisions.json exists in bridges.geojson; every
 cutoff has a decision for every bridge; risk values are within the ladder;
@@ -7,7 +7,11 @@ probabilities are between 0 and 1; for every cutoff no value comes from a
 later month (compared against out/model_decisions_<cutoff>.csv and the
 rolls in out/dresden_state.pkl); owner fields appear only under the "owner"
 key and the per-bridge owner_condition_alert; not-monitored bridges carry
-their reason. Exits non-zero on any failure.
+their reason; no whole-period EGMS values (also in the phase-5c files);
+scatterer ids match between scatterer_velocity.json and scatterers.geojson
+with 33 entries each; per-bridge means of the exported values match
+decisions.json vel to 0.1; the s1 corners lie inside the Dresden bbox.
+Exits non-zero on any failure.
 
 Usage::
 
@@ -43,6 +47,9 @@ WHOLE_PERIOD_KEYS = {
 }
 NUM_TOL = 0.002  # 3-decimal rounding
 SPAN_TOL = 0.011  # 2-decimal rounding
+DRESDEN_BBOX = (13.700, 51.030, 13.790, 51.080)  # minlon, minlat, maxlon, maxlat
+N_CUTOFFS = 33
+VEL_MEAN_TOL = 0.1  # per-point values are rounded to 0.1 in the export
 
 
 def _load_json(path: Path):
@@ -316,13 +323,18 @@ def run_checks(data_dir: Path, out_dir: Path) -> list[str]:
                                   f"without a reason")
 
     # 8. no whole-period EGMS values (SPEC 3.5). Fail if any web/data file
-    # carries a whole-period column by name or by short key (v/c).
+    # carries a whole-period column by name or by short key (v/c). The one
+    # exception is the top-level "v" map in scatterer_velocity.json, which
+    # holds per-cutoff (not whole-period) velocities; "v" stays banned in
+    # scatterers.geojson, which keeps id + track + geometry only.
     def walk_keys(node, path: list, src: str):
         if isinstance(node, dict):
             for key, val in node.items():
                 if key in WHOLE_PERIOD_KEYS:
-                    errors.append(f"{src}: whole-period key {key!r} banned "
-                                  f"by SPEC 3.5 at {path + [key]}")
+                    if not (src == "scatterer_velocity.json" and path == []
+                            and key == "v"):
+                        errors.append(f"{src}: whole-period key {key!r} banned "
+                                      f"by SPEC 3.5 at {path + [key]}")
                 walk_keys(val, path + [key], src)
         elif isinstance(node, list):
             for i, val in enumerate(node):
@@ -331,13 +343,120 @@ def run_checks(data_dir: Path, out_dir: Path) -> list[str]:
     walk_keys(decisions, [], "decisions.json")
     walk_keys(bridges, [], "bridges.geojson")
     walk_keys(spans, [], "spans.json")
-    for fname in ("scatterers.geojson", "sam.geojson"):
+    for fname in ("scatterers.geojson", "sam.geojson",
+                  "scatterer_velocity.json", "s1_amplitude.json"):
         fpath = data_dir / fname
         if fpath.exists():
             try:
                 walk_keys(_load_json(fpath), [], fname)
             except json.JSONDecodeError as exc:
                 errors.append(f"invalid JSON in {fname}: {exc}")
+
+    # 9. scatterer ids match both ways; every array has 33 entries.
+    vel_data: dict = {}
+    vel_ids: set = set()
+    svel_path = data_dir / "scatterer_velocity.json"
+    if not svel_path.exists():
+        errors.append("missing file: scatterer_velocity.json")
+    else:
+        try:
+            svel = _load_json(svel_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"invalid JSON in scatterer_velocity.json: {exc}")
+            svel = None
+        if svel is not None:
+            if svel.get("cutoffs") != cutoffs:
+                errors.append("scatterer_velocity.json cutoffs differ from "
+                              "decisions.json cutoffs")
+            vel_data = svel.get("v", {}) or {}
+            vel_ids = set(vel_data)
+            for pid, arr in vel_data.items():
+                if not isinstance(arr, list) or len(arr) != N_CUTOFFS:
+                    got = len(arr) if isinstance(arr, list) else type(arr).__name__
+                    errors.append(f"scatterer_velocity.json {pid!r}: expected "
+                                  f"{N_CUTOFFS} entries, got {got}")
+    scat_path = data_dir / "scatterers.geojson"
+    if not scat_path.exists():
+        errors.append("missing file: scatterers.geojson")
+    else:
+        try:
+            scat = _load_json(scat_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"invalid JSON in scatterers.geojson: {exc}")
+            scat = None
+        if scat is not None:
+            geo_ids = {f.get("properties", {}).get("id")
+                       for f in scat.get("features", [])}
+            only_vel = vel_ids - geo_ids
+            only_geo = geo_ids - vel_ids
+            if only_vel:
+                errors.append(f"{len(only_vel)} scatterer_velocity.json ids "
+                              f"missing from scatterers.geojson "
+                              f"(e.g. {sorted(only_vel)[:3]})")
+            if only_geo:
+                errors.append(f"{len(only_geo)} scatterers.geojson ids "
+                              f"missing from scatterer_velocity.json "
+                              f"(e.g. {sorted(only_geo)[:3]})")
+
+    # 10. per-bridge means of the exported per-point values match
+    # decisions.json vel to 0.1. Point ids end in "|<asset_id>", and for
+    # monitored bridges the web id equals the asset id.
+    if vel_data and cutoffs:
+        by_bridge: dict[str, list] = {}
+        for pid in vel_data:
+            tail = str(pid).rsplit("|", 1)
+            bid = None
+            if len(tail) == 2:
+                try:
+                    bid = str(int(tail[1]))
+                except ValueError:
+                    bid = None
+            if bid is None or bid not in bridge_ids:
+                errors.append(f"scatterer_velocity.json id {pid!r} does not "
+                              f"map to a known bridge")
+                continue
+            by_bridge.setdefault(bid, []).append(pid)
+        for bid, members in sorted(by_bridge.items()):
+            for i, cutoff in enumerate(cutoffs):
+                vals = [vel_data[m][i] for m in members
+                        if i < len(vel_data[m]) and vel_data[m][i] is not None]
+                mean = sum(vals) / len(vals) if vals else None
+                exp = per_cutoff.get(cutoff, {}).get(bid, {}).get("vel")
+                if mean is None and exp is None:
+                    continue
+                if mean is None or exp is None or \
+                        abs(float(mean) - float(exp)) > VEL_MEAN_TOL:
+                    errors.append(
+                        f"[{cutoff} {id_to_name.get(bid, bid)}] exported "
+                        f"per-point mean {mean} != decisions vel {exp} "
+                        f"(tol {VEL_MEAN_TOL})")
+
+    # 11. the s1 corners lie inside the Dresden bounding box.
+    s1_path = data_dir / "s1_amplitude.json"
+    if not s1_path.exists():
+        errors.append("missing file: s1_amplitude.json")
+    else:
+        try:
+            s1 = _load_json(s1_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"invalid JSON in s1_amplitude.json: {exc}")
+            s1 = None
+        if s1 is not None:
+            minlon, minlat, maxlon, maxlat = DRESDEN_BBOX
+            coords = s1.get("coordinates", [])
+            if len(coords) != 4:
+                errors.append(f"s1_amplitude.json: expected 4 corners, "
+                              f"got {len(coords)}")
+            for corner in coords:
+                try:
+                    lon, lat = float(corner[0]), float(corner[1])
+                except (TypeError, ValueError, IndexError):
+                    errors.append(f"s1_amplitude.json: bad corner "
+                                  f"{corner!r}")
+                    continue
+                if not (minlon <= lon <= maxlon and minlat <= lat <= maxlat):
+                    errors.append(f"s1_amplitude.json corner {corner!r} "
+                                  f"outside the Dresden bbox")
     return errors
 
 
@@ -372,6 +491,42 @@ def self_test() -> int:
             bid = sorted(dec["decisions"][c0])[0]
             dec["decisions"][c0][bid]["mean_velocity"] = 0.0
             dec_path.write_text(json.dumps(dec))
+            return
+        if kind == "scatterer-id-mismatch":
+            sv_path = data_dir / "scatterer_velocity.json"
+            sv = json.loads(sv_path.read_text())
+            sv["v"].pop(sorted(sv["v"])[0])
+            sv_path.write_text(json.dumps(sv))
+            return
+        if kind == "scatterer-mean-mismatch":
+            # Shift one bridge's cutoff-0 values by +5 mm/yr so its
+            # exported mean leaves the 0.1 tolerance around decisions vel.
+            sv_path = data_dir / "scatterer_velocity.json"
+            sv = json.loads(sv_path.read_text())
+            asset = sorted(sv["v"])[0].rsplit("|", 1)[1]
+            for pid, arr in sv["v"].items():
+                if pid.rsplit("|", 1)[1] == asset and arr[0] is not None:
+                    arr[0] = round(arr[0] + 5.0, 1)
+            sv_path.write_text(json.dumps(sv))
+            return
+        if kind == "scatterer-array-len":
+            sv_path = data_dir / "scatterer_velocity.json"
+            sv = json.loads(sv_path.read_text())
+            pid = sorted(sv["v"])[0]
+            sv["v"][pid] = sv["v"][pid][:32]
+            sv_path.write_text(json.dumps(sv))
+            return
+        if kind == "s1-corner-outside":
+            s1_path = data_dir / "s1_amplitude.json"
+            s1 = json.loads(s1_path.read_text())
+            s1["coordinates"][0] = [0.0, 0.0]
+            s1_path.write_text(json.dumps(s1))
+            return
+        if kind == "whole-period-newfile":
+            sv_path = data_dir / "scatterer_velocity.json"
+            sv = json.loads(sv_path.read_text())
+            sv["mean_velocity"] = 0.0
+            sv_path.write_text(json.dumps(sv))
             return
         dec_path = data_dir / "decisions.json"
         dec = json.loads(dec_path.read_text())
@@ -415,7 +570,10 @@ def self_test() -> int:
 
     kinds = ["extra-bridge", "missing-decision", "bad-risk", "bad-prob",
              "future-leak", "owner-leak", "missing-reason",
-             "whole-period", "whole-period-name"]
+             "whole-period", "whole-period-name",
+             "scatterer-id-mismatch", "scatterer-mean-mismatch",
+             "scatterer-array-len", "s1-corner-outside",
+             "whole-period-newfile"]
     failed = False
     for kind in kinds:
         tmp_data = _copy_data(data_src)

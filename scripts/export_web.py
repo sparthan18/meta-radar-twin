@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Export web map data from out/ only (SPEC section 8, phase 5a).
+"""Export web map data from out/ only (SPEC section 8, phase 5c).
 
 Reads ``out/`` only (no API calls, no ``data/`` reads) and writes ``web/data/``:
 ``bridges.geojson``, ``spans.json``, ``decisions.json``, ``scatterers.geojson``,
-``sam.geojson`` and ``memos/<cutoff>.md``. Simplifies polygons and rounds
+``scatterer_velocity.json``, ``sam.geojson``, ``s1_amplitude.png``,
+``s1_amplitude.json`` and ``memos/<cutoff>.md``. Simplifies polygons and rounds
 numbers so the total stays under 3 MB. Prints each file size.
 
 Usage::
@@ -271,13 +272,16 @@ def main() -> int:
     # --- scatterers.geojson: one point per bound scatterer. Whole-period
     # EGMS values (mean_velocity/temporal_coherence, short keys v/c) are
     # banned by SPEC 3.5, so keep only the id, the track and the geometry.
-    # Phase 5c adds per-cutoff values.
+    # The id is the point id "<pid>|<track>|<asset_id>" (same formula as
+    # scripts/point_velocity.py): pid alone is not unique because points in
+    # overlapping footprints are bound to two bridges. Per-cutoff values
+    # live in scatterer_velocity.json, keyed by the same id.
     sfeats = []
     for _, p in pts.sort_values(["asset_id", "pid"]).iterrows():
         sfeats.append({
             "type": "Feature",
             "properties": {
-                "id": str(int(p["asset_id"])),
+                "id": f"{p['pid']}|{p['track']}|{int(p['asset_id'])}",
                 "track": str(p["track"]),
             },
             "geometry": {"type": "Point", "coordinates": [
@@ -285,6 +289,23 @@ def main() -> int:
         })
     (WEB_DATA / "scatterers.geojson").write_text(json.dumps(
         {"type": "FeatureCollection", "features": sfeats}))
+
+    # --- scatterer_velocity.json: per-point cutoff velocity at each cutoff,
+    # from out/scatterer_velocity.csv (written by scripts/point_velocity.py).
+    svel = pd.read_csv(OUT / "scatterer_velocity.csv")
+    csv_cutoffs = [c for c in svel.columns if c != "point_id"]
+    if csv_cutoffs != cutoffs:
+        raise ValueError("scatterer_velocity.csv columns differ from the "
+                         "pickle cutoffs")
+    vel_map: dict[str, list] = {}
+    for _, r in svel.iterrows():
+        vals = []
+        for c in cutoffs:
+            v = r[c]
+            vals.append(None if pd.isna(v) else round(float(v), 1))
+        vel_map[str(r["point_id"])] = vals
+    (WEB_DATA / "scatterer_velocity.json").write_text(json.dumps(
+        {"cutoffs": cutoffs, "v": vel_map}))
 
     # --- sam.geojson: SAM polygons with IoU vs the OSM footprints in hazards.
     # Bright fraction needs the radar chip under data/, which this exporter
@@ -316,6 +337,11 @@ def main() -> int:
     (WEB_DATA / "sam.geojson").write_text(json.dumps(
         {"type": "FeatureCollection", "features": sam_feats}))
 
+    # --- s1_amplitude.png + .json: verbatim copies of the rendered chip
+    # (scripts/render_s1_chip.py wrote them into out/).
+    shutil.copyfile(OUT / "s1_amplitude.png", WEB_DATA / "s1_amplitude.png")
+    shutil.copyfile(OUT / "s1_amplitude.json", WEB_DATA / "s1_amplitude.json")
+
     # --- memos: verbatim copies for the cutoffs that have one. Clear
     # stale copies first so no memos in out/ means no memos in web/data.
     for stale in (WEB_DATA / "memos").glob("*.md"):
@@ -324,7 +350,8 @@ def main() -> int:
         shutil.copyfile(memo, WEB_DATA / "memos" / memo.name)
 
     files = ["bridges.geojson", "spans.json", "decisions.json",
-             "scatterers.geojson", "sam.geojson"]
+             "scatterers.geojson", "scatterer_velocity.json", "sam.geojson",
+             "s1_amplitude.png", "s1_amplitude.json"]
     total = 0
     for name in files:
         size = (WEB_DATA / name).stat().st_size

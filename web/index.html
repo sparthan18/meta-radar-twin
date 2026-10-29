@@ -119,6 +119,11 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
       <button id="btnImagery" class="active" type="button">Imagery</button>
       <button id="btnDark" type="button">Dark</button>
     </div>
+    <div class="basemap-toggle" role="group" aria-label="Layers">
+      <button id="btnScatter" type="button" title="3,694 EGMS points coloured by cutoff velocity">Scatterers</button>
+      <button id="btnSam" type="button" title="SAM 3.1 bridge outlines near Carolabrücke">SAM</button>
+      <button id="btnRadar" type="button" title="Sentinel-1 amplitude chip around Carolabrücke">Radar</button>
+    </div>
   </div>
 </header>
 <main>
@@ -131,6 +136,8 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
       <span><span class="sw" style="background:#ef4444"></span>high</span>
       <span><span class="sw" style="background:#9ca3af"></span>not monitored</span>
       <span>span dots: −4 (blue) … +4 (red) mm/yr vertical change</span>
+      <span>scatterers: same ±4 scale, grey = no data at this month</span>
+      <span><span class="sw" style="background:#22d3ee"></span>SAM outlines (one Sentinel-2 chip; near Carolabrücke only)</span>
     </div>
     <h2>Ranking at <span id="rankCutoff">2024-09-01</span></h2>
     <ol id="ranking"></ol>
@@ -149,7 +156,19 @@ let CUT = [], DEC = {}, BRIDGES = [], SPANS = {}, OWNER = {}, EVENT_DATE = "", E
 let ID2NAME = {}, NAME2ID = {}, BRIDGE_PROPS = {};
 let map = null, selectedId = "4", cutoffIdx = 32;
 let EVENT_ASSET = "Carolabrücke";
-let spanPopup = null;
+let spanPopup = null, scatPopup = null, samPopup = null;
+let SCAT = null, SCAT_V = {}, S1_COORDS = null;
+// Scatterer colour: a paint expression over the joined velocity array at a
+// literal month index (["at", idx, ["get", "v"]]), refreshed with one
+// setPaintProperty per slider tick. The alternative, setFeatureState per
+// point, would need 3,694 state writes per tick (spans get away with it at
+// 98 features); a single style update keeps slider drags smooth.
+function scatterColorExpr(idx) {
+  const atIdx = ["at", idx, ["get", "v"]];
+  return ["case", ["==", atIdx, null], "#9ca3af",
+    ["interpolate", ["linear"], atIdx,
+      -4, "#2166ac", -2, "#abd9e9", 0, "#f5f5f5", 2, "#fdae61", 4, "#b2182b"]];
+}
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtEventDate(iso) {
@@ -206,6 +225,11 @@ function initMap() {
   map.on("load", () => {
     map.addSource("bridges", { type: "geojson",
       data: "data/bridges.geojson", promoteId: "id" });
+    if (S1_COORDS) {
+      map.addSource("s1", { type: "image", url: "data/s1_amplitude.png",
+        coordinates: S1_COORDS });
+    }
+    map.addSource("sam", { type: "geojson", data: "data/sam.geojson" });
     const spanFc = { type: "FeatureCollection", features: [] };
     for (const [bid, arr] of Object.entries(SPANS)) {
       for (const s of arr) {
@@ -238,9 +262,18 @@ function initMap() {
     }
     map.addSource("bridge-centroids", { type: "geojson", data: centroidFc,
       promoteId: "id" });
+    if (SCAT) {
+      map.addSource("scatterers", { type: "geojson", data: SCAT,
+        promoteId: "id" });
+    }
     const riskExpr = ["match", ["feature-state", "risk"],
       "high", RISK_COLORS.high, "elevated", RISK_COLORS.elevated,
       "watch", RISK_COLORS.watch, "none", RISK_COLORS.none, RISK_COLORS.unknown];
+    if (map.getSource("s1")) {
+      map.addLayer({ id: "s1-raster", type: "raster", source: "s1",
+        paint: { "raster-opacity": 0.8 },
+        layout: { visibility: "none" } });
+    }
     map.addLayer({ id: "bridges-fill", type: "fill", source: "bridges",
       paint: { "fill-color": riskExpr, "fill-opacity": 0.38 } });
     map.addLayer({ id: "bridges-line", type: "line", source: "bridges",
@@ -250,10 +283,9 @@ function initMap() {
       filter: ["==", ["get", "monitored"], false],
       paint: { "line-color": RISK_COLORS.unknown, "line-width": 2,
         "line-dasharray": [3, 2.5] } });
-    map.addLayer({ id: "bridges-markers", type: "circle", source: "bridge-centroids",
-      maxzoom: 15,
-      paint: { "circle-color": riskExpr, "circle-radius": 8, "circle-opacity": 0.9,
-        "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
+    map.addLayer({ id: "sam-lines", type: "line", source: "sam",
+      paint: { "line-color": "#22d3ee", "line-width": 2.5 },
+      layout: { visibility: "none" } });
     map.addLayer({ id: "spans-circles", type: "circle", source: "spans",
       paint: {
         "circle-color": ["interpolate", ["linear"],
@@ -261,6 +293,22 @@ function initMap() {
           -4, "#2166ac", -2, "#abd9e9", 0, "#f5f5f5", 2, "#fdae61", 4, "#b2182b"],
         "circle-radius": 6, "circle-opacity": 0.92,
         "circle-stroke-color": "#ffffff", "circle-stroke-width": 1 } });
+    if (map.getSource("scatterers")) {
+      map.addLayer({ id: "scatterers-circles", type: "circle",
+        source: "scatterers",
+        paint: {
+          "circle-color": scatterColorExpr(cutoffIdx),
+          "circle-radius": 4, "circle-opacity": 0.9,
+          "circle-stroke-color": "#ffffff", "circle-stroke-width": 0.75 },
+        layout: { visibility: "none" } });
+    }
+    // City-zoom risk markers above the span dots (phase 5c): 5b left them
+    // underneath, so up to 98 mostly white dots covered the coloured markers.
+    // Markers stay last so they sit above every other bridge layer too.
+    map.addLayer({ id: "bridges-markers", type: "circle", source: "bridge-centroids",
+      maxzoom: 15,
+      paint: { "circle-color": riskExpr, "circle-radius": 8, "circle-opacity": 0.9,
+        "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
     map.on("click", "bridges-fill", (e) => {
       if (e.features && e.features.length) selectBridge(String(e.features[0].properties.id));
     });
@@ -284,6 +332,30 @@ function initMap() {
         .setHTML(`<div><strong>${esc(ID2NAME[bid] || bid)}</strong><br>span ${esc(String(spanId))}<br>${esc(vtxt)} at ${esc(CUT[cutoffIdx])}</div>`)
         .addTo(map);
     });
+    map.on("click", "scatterers-circles", (e) => {
+      if (!e.features || !e.features.length) return;
+      const fp = e.features[0].properties;
+      const pid = String(fp.id);
+      const arr = SCAT_V[pid];
+      const val = arr ? arr[cutoffIdx] : null;
+      const vtxt = (val === null || val === undefined || Number.isNaN(val))
+        ? "no data" : `${Number(val).toFixed(1)} mm/yr`;
+      if (scatPopup) { scatPopup.remove(); scatPopup = null; }
+      scatPopup = new maplibregl.Popup({ closeButton: true, maxWidth: "260px" })
+        .setLngLat(e.lngLat)
+        .setHTML(`<div><strong>${esc(pid)}</strong><br>track ${esc(String(fp.track))}<br>${esc(vtxt)} at ${esc(CUT[cutoffIdx])}</div>`)
+        .addTo(map);
+    });
+    map.on("click", "sam-lines", (e) => {
+      if (!e.features || !e.features.length) return;
+      const fp = e.features[0].properties;
+      const txt = `${fp.bridge} · SAM 3.1 score ${Number(fp.score).toFixed(2)} · IoU ${Number(fp.iou).toFixed(2)}`;
+      if (samPopup) { samPopup.remove(); samPopup = null; }
+      samPopup = new maplibregl.Popup({ closeButton: true, maxWidth: "300px" })
+        .setLngLat(e.lngLat)
+        .setHTML(`<div>${esc(txt)}</div>`)
+        .addTo(map);
+    });
     map.getCanvas().style.cursor = "pointer";
     applyCutoff();
   });
@@ -297,6 +369,18 @@ function initMap() {
     map.setLayoutProperty("esri-dark-layer", "visibility", "visible");
     $("btnDark").classList.add("active"); $("btnImagery").classList.remove("active");
   };
+  const layerToggle = (btnId, layerId) => {
+    $(btnId).onclick = () => {
+      if (!map.getLayer(layerId)) return;
+      const cur = map.getLayoutProperty(layerId, "visibility") || "visible";
+      const next = cur === "none" ? "visible" : "none";
+      map.setLayoutProperty(layerId, "visibility", next);
+      $(btnId).classList.toggle("active", next === "visible");
+    };
+  };
+  layerToggle("btnScatter", "scatterers-circles");
+  layerToggle("btnSam", "sam-lines");
+  layerToggle("btnRadar", "s1-raster");
 }
 
 function applyCutoff() {
@@ -309,8 +393,10 @@ function applyCutoff() {
   const badge = $("eventBadge");
   if (isEventMonth(cutoff)) badge.textContent = eventBadgeText(cutoff);
   badge.classList.toggle("show", isEventMonth(cutoff));
-  // Span popup shows the selected month's value; close it on month change.
+  // Span and scatterer popups show the selected month's value; close them
+  // on month change.
   if (spanPopup) { spanPopup.remove(); spanPopup = null; }
+  if (scatPopup) { scatPopup.remove(); scatPopup = null; }
   if (map && map.getSource("bridges")) {
     for (const bid of Object.keys(ID2NAME)) {
       const rk = riskOf(cutoff, bid);
@@ -325,6 +411,10 @@ function applyCutoff() {
         map.setFeatureState({ source: "spans", id: bid + "-" + s.span },
           { v: (v === null || v === undefined) ? 0 : v });
       }
+    }
+    if (map.getLayer("scatterers-circles")) {
+      map.setPaintProperty("scatterers-circles", "circle-color",
+        scatterColorExpr(cutoffIdx));
     }
   }
   renderRanking(cutoff);
@@ -497,13 +587,23 @@ function selectBridge(bid) {
 }
 
 async function boot() {
-  const [b, dec, sp] = await Promise.all([
+  const [b, dec, sp, scat, scatVel, s1] = await Promise.all([
     fetch("data/bridges.geojson").then((r) => r.json()),
     fetch("data/decisions.json").then((r) => r.json()),
-    fetch("data/spans.json").then((r) => r.json())
+    fetch("data/spans.json").then((r) => r.json()),
+    fetch("data/scatterers.geojson").then((r) => r.json()),
+    fetch("data/scatterer_velocity.json").then((r) => r.json()),
+    fetch("data/s1_amplitude.json").then((r) => r.json())
   ]);
   BRIDGES = b.features; DEC = dec.decisions; CUT = dec.cutoffs;
   SPANS = sp.spans; OWNER = dec.owner || {};
+  SCAT_V = scatVel.v || {};
+  SCAT = scat;
+  for (const f of SCAT.features) {
+    const pid = String(f.properties.id);
+    f.properties.v = SCAT_V[pid] || new Array(CUT.length).fill(null);
+  }
+  S1_COORDS = s1.coordinates || null;
   EVENT_DATE = dec.event_date || ""; EVENT_MONTH = EVENT_DATE.slice(0, 7) + "-01";
   EVENT_ASSET = dec.event_asset || "Carolabrücke";
   if (EVENT_DATE && EVENT_MONTH) {
