@@ -117,15 +117,21 @@ def asset_features(
     state: dict | str | Path,
     cutoff: str,
     s1_rtc_vv: str | Path | None = None,
+    use_egms_columns: bool = False,
 ) -> pd.DataFrame:
     """One row per analysed bridge at ``cutoff`` with exactly the SPEC §3.6 fields.
 
     ``state`` is the ``rank_city`` state dict or the path of the pickle (e.g.
-    ``out/dresden_state.pkl``). ``long_term_velocity_mm_yr`` is the mean EGMS
-    ``mean_velocity`` over the asset's points; city p80 values are computed
-    across the bridges at that cutoff; ``condition`` comes from the owner
-    register (``SITES[*].condition``), default ``"unknown"``. Without a radar
-    chip (``s1_rtc_vv=None``), ``bright_fraction`` is null.
+    ``out/dresden_state.pkl``). ``long_term_velocity_mm_yr`` is the mean of
+    the per-point cutoff velocities at this cutoff (``state["velocity"]``).
+    With ``use_egms_columns=True`` it is the mean EGMS ``mean_velocity``
+    over the asset's points (whole-period baseline reproduction only).
+    Without that explicit switch, a state with no per-cutoff velocity table
+    raises instead of silently falling back to ``mean_velocity``. City p80
+    values are computed across the bridges at that cutoff; ``condition``
+    comes from the owner register (``SITES[*].condition``), default
+    ``"unknown"``. Without a radar chip (``s1_rtc_vv=None``),
+    ``bright_fraction`` is null.
     """
     st = _load_state(state)
     if cutoff not in st["scores"].index:
@@ -143,12 +149,27 @@ def asset_features(
     vis = radar_visibility(st, s1_rtc_vv=s1_rtc_vv).set_index("asset")
     persist = escalation_history(st, cutoff)
     rows = []
+    vel_table = st.get("velocity") if isinstance(st, dict) else None
+    if not use_egms_columns and vel_table is None:
+        raise ValueError(
+            "asset_features leak-free requires the state's per-cutoff "
+            "velocity table; pass use_egms_columns=True explicitly to "
+            "reproduce the whole-period baseline via mean_velocity")
     for _, b in bridges.sort_values("name").iterrows():
         bp = by_asset.get_group(b["asset_id"]) if b["asset_id"] in by_asset.groups else None
         n = 0 if bp is None else len(bp)
         ntracks = 0 if bp is None else int(bp["track"].nunique())
-        vel = float("nan") if bp is None else float(bp["mean_velocity"].mean())
         name = b["name"]
+        if use_egms_columns:
+            vel = float("nan") if bp is None else float(bp["mean_velocity"].mean())
+        else:
+            if (cutoff not in getattr(vel_table, "index", [])
+                    or name not in getattr(vel_table, "columns", [])):
+                raise ValueError(
+                    f"asset_features leak-free has no velocity for {name} "
+                    f"at {cutoff}; pass use_egms_columns=True explicitly to "
+                    "reproduce the whole-period baseline via mean_velocity")
+            vel = float(vel_table.loc[cutoff, name])
         esc12, mse = persist[name]
         rows.append({
             "asset": name,

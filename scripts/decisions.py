@@ -54,9 +54,13 @@ def flag_string(fl: dict) -> str:
     return "".join(letter if fl.get(name) else "." for name, letter in FLAG_LETTERS)
 
 
-def decide_cutoff(cutoff: str) -> pd.DataFrame:
+def decide_cutoff(cutoff: str, state_path: str | Path | None = None,
+                  use_egms_columns: bool = False) -> pd.DataFrame:
     """Features + flags + decision for every bridge at one cutoff."""
-    feats = asset_features(STATE, cutoff, s1_rtc_vv=CHIP if CHIP.exists() else None)
+    state_src = Path(state_path) if state_path is not None else STATE
+    feats = asset_features(state_src, cutoff,
+                           s1_rtc_vv=CHIP if CHIP.exists() else None,
+                           use_egms_columns=use_egms_columns)
     rows = []
     for _, row in feats.iterrows():
         fl = flags(row)
@@ -130,10 +134,13 @@ def print_table(table: pd.DataFrame) -> None:
             print(f"      reason: {r['reason']}")
 
 
-def main(which: str) -> int:
+def main(which: str, state_path: str | Path | None = None,
+         out_dir: str | Path | None = None,
+         use_egms_columns: bool = False) -> int:
     import pickle
 
-    with open(STATE, "rb") as fh:
+    state_src = Path(state_path) if state_path is not None else STATE
+    with open(state_src, "rb") as fh:
         cutoffs = pickle.load(fh)["cutoffs"]
     if which == "all":
         selected = cutoffs
@@ -149,10 +156,12 @@ def main(which: str) -> int:
                        "points_per_ha", "reason"]].to_string(index=False))
     else:
         print("  (none)")
-    out_dir = ROOT / "out"
+    out_dir = Path(out_dir) if out_dir is not None else ROOT / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
     counts = []
     for cutoff in selected:
-        table = decide_cutoff(cutoff)
+        table = decide_cutoff(cutoff, state_path=state_src,
+                              use_egms_columns=use_egms_columns)
         table.to_csv(out_dir / f"decisions_{cutoff}.csv", index=False)
         if which != "all":
             print_table(table)
@@ -351,22 +360,16 @@ def main_model(which: str) -> int:
     print(f"cost this cutoff: ${cost:.4f} "
           f"({basis}; per-cutoff estimate ${per_cutoff:.4f})")
     proj33 = per_cutoff * 33
-    proj21 = per_cutoff * 21
-    print(f"projection for all 33 cutoffs: ${proj33:.2f}; for 21 cutoffs: ${proj21:.2f}")
+    print(f"projection for all 33 cutoffs: ${proj33:.2f}")
     if which != "all":
         print_model_table(table)
         return 0
-    if proj33 <= 5:
-        selected = cutoffs
-        print("projection within $5: running all 33 cutoffs")
-    elif proj21 <= 5:
-        selected = [c for c in cutoffs if "2023-01-01" <= c <= "2024-09-01"]
-        print("projection exceeds $5 for 33 cutoffs: running only the 21 cutoffs "
-              "2023-01-01 to 2024-09-01")
-    else:
-        print(f"projection exceeds $5 even for 21 cutoffs (${proj21:.2f}): stopping, "
-              "no further model calls")
+    if proj33 > 8:
+        print(f"projection for 33 cutoffs (${proj33:.2f}) exceeds the $8.00 "
+              "phase cap: stopping, no further model calls")
         return 1
+    selected = cutoffs
+    print("projection within $8: running all 33 cutoffs")
     agree_rows = [agreement_row(first, table)]
     dis_rows = disagreement_rows(first, table)
     for cutoff in selected:
@@ -383,6 +386,11 @@ def main_model(which: str) -> int:
         usage = model_mod.get_usage()
         print(f"{cutoff}: ${model_cost(usage):.4f} cumulative "
               f"({usage['calls']} calls, {usage['cached']} cached)")
+        if model_cost(usage) > 8:
+            print(f"cumulative spend ${model_cost(usage):.4f} passes $8.00: "
+                  f"stopping at {cutoff} "
+                  f"({len(agree_rows)}/33 cutoffs done)")
+            break
     agree_df = pd.DataFrame(agree_rows).sort_values("cutoff").reset_index(drop=True)
     agree_df.to_csv(out_dir / "model_agreement.csv", index=False)
     dis_df = pd.DataFrame(dis_rows, columns=["cutoff", "asset", "rubric_risk", "model_risk", "p_risk"])
@@ -395,11 +403,23 @@ def main_model(which: str) -> int:
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a != "--model"]
-    use_model = "--model" in sys.argv[1:]
-    if len(args) != 1:
-        print(__doc__)
-        raise SystemExit(2)
-    if use_model:
-        raise SystemExit(main_model(args[0]))
-    raise SystemExit(main(args[0]))
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Rubric decisions per cutoff.")
+    parser.add_argument("which", help="cutoff or 'all'")
+    parser.add_argument("--model", action="store_true", help="also run Muse Spark")
+    parser.add_argument("--state", default=None, help="state pickle (default out/dresden_state.pkl)")
+    parser.add_argument("--outdir", default=None, help="output directory (default out/)")
+    parser.add_argument("--use-egms", action="store_true",
+                        help="whole-period EGMS velocity, only for the baseline "
+                             "reproduction")
+    parser.add_argument("--leakfree", action="store_true",
+                        help="no-op alias; leak-free is the default")
+    args = parser.parse_args()
+    if args.model:
+        if args.state is not None or args.outdir is not None or args.use_egms:
+            print("--model does not accept --state/--outdir/--use-egms")
+            raise SystemExit(2)
+        raise SystemExit(main_model(args.which))
+    raise SystemExit(main(args.which, state_path=args.state, out_dir=args.outdir,
+                          use_egms_columns=args.use_egms))

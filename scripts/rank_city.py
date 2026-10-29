@@ -28,7 +28,13 @@ sys.path.insert(0, str(ROOT))
 
 from radartwin.analytics.bind import bind_points  # noqa: E402
 from radartwin.analytics.geometry import along_cross, assign_spans, bridge_axis  # noqa: E402
-from radartwin.analytics.retro import rolling_span_anomaly, score_history, span_meta  # noqa: E402
+from radartwin.analytics.retro import (  # noqa: E402
+    MIN_KEEP_EPOCHS,
+    cutoff_coherence_velocity,
+    rolling_span_anomaly,
+    score_history,
+    span_meta,
+)
 from radartwin.config import SITES  # noqa: E402
 from radartwin.ingest.egms import date_columns, load_egms, time_series  # noqa: E402
 from radartwin.segment.osm import dissolve_bridges, load_bridges  # noqa: E402
@@ -73,9 +79,32 @@ def load_city_points(data_dir: Path) -> tuple[gpd.GeoDataFrame, dict[str, list]]
 
 
 def analyse_bridge(bp: gpd.GeoDataFrame, cutoffs: list[str],
-                   event_date: str | None, track_cols: dict[str, list]
-                   ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Axis -> spans -> rolling anomaly -> scores for one bridge's points."""
+                   event_date: str | None, track_cols: dict[str, list],
+                   use_egms_columns: bool = False,
+                   plant_future_read: bool = False,
+                   ) -> tuple:
+    """Axis -> spans -> rolling anomaly -> scores for one bridge's points.
+
+    Leak-free (the default): per-cutoff coherence and velocity from each
+    cutoff's own past; returns ``(roll, scores, meta, vel, coh,
+    meta_by_cutoff)`` where ``vel``/``coh`` are Series over cutoffs of the
+    per-point means and ``meta_by_cutoff`` maps cutoff -> span meta.
+    Baseline (``use_egms_columns=True``, only for the baseline
+    reproduction): whole-period EGMS ``temporal_coherence`` for ``n_eff``;
+    returns ``(roll, scores, meta)`` exactly as before phase 4d.
+    ``plant_future_read`` (test hook for check_truncation --self-test only)
+    includes the first post-cutoff epoch in the last cutoff's fits.
+    """
+    if use_egms_columns:
+        return _analyse_bridge_baseline(bp, cutoffs, event_date, track_cols)
+    return analyse_bridge_leakfree(bp, cutoffs, event_date, track_cols,
+                                   plant_future_read=plant_future_read)
+
+
+def _analyse_bridge_baseline(bp: gpd.GeoDataFrame, cutoffs: list[str],
+                             event_date: str | None, track_cols: dict[str, list]
+                             ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Pre-4d path, bit-identical: static EGMS coherence for ``n_eff``."""
     bp = bp.copy()
     origin, axis, crs = bridge_axis(bp)
     along, cross = along_cross(bp, origin, axis, crs)
@@ -91,8 +120,73 @@ def analyse_bridge(bp: gpd.GeoDataFrame, cutoffs: list[str],
             "los": tp[["los_east", "los_north", "los_up"]].to_numpy(),
         }
     roll = rolling_span_anomaly(track_data, cutoffs, event_date=event_date)
-    meta = span_meta(bp[["span", "track", "temporal_coherence"]])
+    meta = span_meta(bp[["span", "track", "temporal_coherence"]],
+                     use_egms_columns=True)
     return roll, score_history(roll, meta), meta
+
+
+def analyse_bridge_leakfree(bp: gpd.GeoDataFrame, cutoffs: list[str],
+                            event_date: str | None, track_cols: dict[str, list],
+                            plant_future_read: bool = False,
+                            ) -> tuple:
+    """Leak-free path (SPEC 3.5): per-cutoff coherence, velocity and shrink.
+
+    Rolls use the same truncated refits as the baseline; only ``n_eff`` (via
+    the cutoff coherence) and the per-point velocities change. Returns
+    ``(roll, scores, meta_last, vel, coh, meta_by_cutoff)``.
+    ``plant_future_read`` is a self-test hook only: at the last cutoff it
+    includes the first post-cutoff epoch in the coherence/velocity fits.
+    """
+    import numpy as np
+
+    bp = bp.copy()
+    origin, axis, crs = bridge_axis(bp)
+    along, cross = along_cross(bp, origin, axis, crs)
+    bp["along"] = along
+    bp["cross"] = cross
+    bp["span"] = assign_spans(bp)
+    track_data: dict[str, dict] = {}
+    for name, tp in bp.groupby("track"):
+        t, y, dates = time_series(tp, track_cols[name])
+        track_data[name] = {
+            "t": t, "Y": y, "dates": dates,
+            "span": tp["span"].to_numpy(),
+            "los": tp[["los_east", "los_north", "los_up"]].to_numpy(),
+            "index": tp.index.to_numpy(),
+        }
+    roll = rolling_span_anomaly(track_data, cutoffs, event_date=event_date)
+    limit_event = pd.Timestamp(event_date) if event_date else None
+    meta_by_cutoff: dict[str, pd.DataFrame] = {}
+    vel_vals: dict[str, float] = {}
+    coh_vals: dict[str, float] = {}
+    # Leak-free: no whole-period columns (temporal_coherence banned here).
+    span_frame = bp[["span", "track"]]
+    for cutoff in cutoffs:
+        limit = pd.Timestamp(cutoff)
+        if limit_event is not None:
+            limit = min(limit, limit_event)
+        point_coh = pd.Series(np.nan, index=bp.index, dtype=float)
+        point_vel = pd.Series(np.nan, index=bp.index, dtype=float)
+        for name, td in track_data.items():
+            keep = np.asarray(td["dates"] < limit)
+            if plant_future_read and cutoff == cutoffs[-1]:
+                after = np.flatnonzero(np.asarray(td["dates"] >= limit))
+                if len(after):
+                    keep[after[0]] = True
+            idx = td["index"]
+            if int(keep.sum()) < MIN_KEEP_EPOCHS:
+                continue
+            coh, vel = cutoff_coherence_velocity(td["t"][keep], td["Y"][:, keep])
+            point_coh.loc[idx] = coh
+            point_vel.loc[idx] = vel
+        meta_by_cutoff[cutoff] = span_meta(
+            span_frame, cutoff=cutoff, point_coherence=point_coh)
+        vel_vals[cutoff] = float(point_vel.mean())
+        coh_vals[cutoff] = float(point_coh.mean())
+    sc = score_history(roll, meta_by_cutoff=meta_by_cutoff)
+    meta_last = meta_by_cutoff[cutoffs[-1]]
+    return (roll, sc, meta_last,
+            pd.Series(vel_vals), pd.Series(coh_vals), meta_by_cutoff)
 
 
 def write_ranking_png(scores: pd.DataFrame, path: Path, event_date: str | None) -> None:
@@ -109,10 +203,11 @@ def write_ranking_png(scores: pd.DataFrame, path: Path, event_date: str | None) 
     plt.close(fig)
 
 
-def main(site_slug: str = "carola") -> dict:
+def main(site_slug: str = "carola", out_dir: str | Path | None = None,
+         use_egms_columns: bool = False) -> dict:
     site = SITES[site_slug]
     data_dir = ROOT / "data" / site.slug
-    out_dir = ROOT / "out"
+    out_dir = Path(out_dir) if out_dir is not None else ROOT / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[rank_city] site={site_slug} event={site.event_date}", flush=True)
@@ -140,9 +235,20 @@ def main(site_slug: str = "carola") -> dict:
     rolls: dict[str, pd.DataFrame] = {}
     metas: dict[str, pd.DataFrame] = {}
     per: dict[str, pd.DataFrame] = {}
+    vels: dict[str, pd.Series] = {}
+    cohs: dict[str, pd.Series] = {}
+    metas_by_cutoff: dict[str, dict] = {}
     for _, b in bridges.sort_values("name").iterrows():
         bp = on[on["asset_id"] == b["asset_id"]]
-        roll, sc, meta = analyse_bridge(bp, cutoffs, site.event_date, track_cols)
+        res = analyse_bridge(bp, cutoffs, site.event_date, track_cols,
+                             use_egms_columns=use_egms_columns)
+        if use_egms_columns:
+            roll, sc, meta = res
+        else:
+            roll, sc, meta, vel, coh, meta_by_cutoff = res
+            vels[b["name"]] = vel
+            cohs[b["name"]] = coh
+            metas_by_cutoff[b["name"]] = meta_by_cutoff
         rolls[b["name"]] = roll
         metas[b["name"]] = meta
         per[b["name"]] = sc
@@ -164,7 +270,12 @@ def main(site_slug: str = "carola") -> dict:
     write_ranking_png(scores, out_dir / f"{OUT_STEM}_ranking.png", site.event_date)
     state = {"rolls": rolls, "scores": scores, "z": z_scores, "wmax": wmax,
              "wspread": wspread, "pts": on, "bridges": bridges,
-             "cutoffs": cutoffs, "meta": metas}
+             "cutoffs": cutoffs, "meta": metas,
+             "use_egms_columns": bool(use_egms_columns)}
+    if not use_egms_columns:
+        state["velocity"] = pd.DataFrame(vels, index=cutoffs)
+        state["coherence"] = pd.DataFrame(cohs, index=cutoffs)
+        state["meta_by_cutoff"] = metas_by_cutoff
     with open(out_dir / f"{OUT_STEM}_state.pkl", "wb") as fh:
         pickle.dump(state, fh)
 
@@ -185,5 +296,16 @@ def main(site_slug: str = "carola") -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Rank a city's bridges (SPEC §8).")
     parser.add_argument("site", nargs="?", default="carola", help="site slug")
+    parser.add_argument("--outdir", default=None, help="output directory (default out/)")
+    parser.add_argument("--leakfree", action="store_true",
+                        help="no-op alias; leak-free is the default")
+    parser.add_argument("--use-egms", action="store_true",
+                        help="whole-period EGMS columns, only for the baseline "
+                             "reproduction")
     args = parser.parse_args()
-    main(args.site)
+    use_egms = False
+    if args.leakfree:
+        use_egms = False  # no-op alias; leak-free is the default
+    if args.use_egms:
+        use_egms = True
+    main(args.site, out_dir=args.outdir, use_egms_columns=use_egms)
