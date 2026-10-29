@@ -498,7 +498,18 @@ only).
 **Phase 5d (memo, polish):** memo panel for cutoffs listed in `memo_cutoffs` ("no memo for this
 month" otherwise), rendered by a small dependency-free `web/memo.js` covering only the memo format;
 phone layout up to 700 px; accessibility pass (focusable ranking rows, `aria-pressed` toggles,
-`aria-valuetext` on the slider, live detail region, 4.5:1 pill contrast, visible focus). Deployment only after the owner approves the host; a live "Run audit" button
+`aria-valuetext` on the slider, live detail region, 4.5:1 pill contrast, visible focus).
+
+**Phase 5e (cinematic replay):** Play button (one cutoff per 700 ms, pauses on manual drag), eased
+colour transitions, FLIP motion in the ranking, a one-line ticker of the high bridges for the
+selected cutoff, dark basemap by default with a glow under high markers, `flyTo` on select, and the
+collapse moment when playback reaches the last cutoff (fly to Carolabrücke, Radar and SAM on).
+Nothing in it shows data after the selected cutoff; all motion is off under
+`prefers-reduced-motion`. Controls on two rows so the desktop slider is at least 480 px wide.
+
+**Phase 5f (optional, if time allows):** a three.js close-up of the selected bridge: the deck as a
+slab, spans displaced by their anomaly at the selected cutoff (exaggerated, labelled as such), from
+`spans.json` only. Deployment only after the owner approves the host; a live "Run audit" button
 needs a hosted service and stays out unless approved.
 
 ## 10. Event-week order (rubric-weighted)

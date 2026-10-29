@@ -34,16 +34,19 @@ header { padding: 12px 16px; border-bottom: 1px solid var(--border);
 header h1 { margin: 0 0 2px; font-size: 19px; font-weight: 650; }
 header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70em; }
 .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
-.slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1 1 340px; }
+.slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; }
 .slider-wrap input[type="range"] { flex: 1; min-width: 160px; }
+#ticker { flex: 0 0 100%; font-size: 13px; color: var(--muted); min-height: 1.2em; }
 #cutoffLabel { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 7em; }
 #eventBadge { visibility: hidden; background: #7f1d1d; color: #fff; border-radius: 4px;
   padding: 3px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 #eventBadge.show { visibility: visible; }
 .basemap-toggle { display: flex; gap: 6px; }
-.basemap-toggle button, .pill-btn { border: 1px solid var(--border); background: var(--card);
+.basemap-toggle button, .pill-btn, #btnPlay { border: 1px solid var(--border); background: var(--card);
   color: var(--text); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
 .basemap-toggle button.active { border-color: var(--accent); color: var(--accent);
+  font-weight: 600; }
+#btnPlay[aria-pressed="true"] { border-color: var(--accent); color: var(--accent);
   font-weight: 600; }
 main { display: flex; min-height: calc(100vh - 148px); }
 #map { flex: 1 1 60%; min-height: 420px; }
@@ -73,7 +76,7 @@ main { display: flex; min-height: calc(100vh - 148px); }
   #map { flex: 0 0 45vh; height: 45vh; min-height: 0; }
   #side { max-width: none; border-left: 0; border-top: 1px solid var(--border);
     max-height: none; overflow-y: visible; }
-  .basemap-toggle button, .pill-btn, #btnMemoClose { min-height: 40px; }
+  .basemap-toggle button, .pill-btn, #btnMemoClose, #btnPlay { min-height: 40px; }
   #ranking .rankrow { min-height: 40px; }
 }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 10px;
@@ -165,10 +168,12 @@ footer { padding: 8px 16px; color: var(--muted); font-size: 12px;
       <input id="slider" type="range" min="0" max="32" value="32" step="1">
       <span id="cutoffLabel">2024-09-01</span>
       <span id="eventBadge">Carolabrücke collapsed ?? days after this cutoff (11 Sep 2024)</span>
+      <button id="btnPlay" type="button" aria-pressed="false">Play</button>
     </div>
+    <div id="ticker" aria-live="polite"></div>
     <div class="basemap-toggle" role="group" aria-label="Basemap">
-      <button id="btnImagery" class="active" type="button" aria-pressed="true">Imagery</button>
-      <button id="btnDark" type="button" aria-pressed="false">Dark</button>
+      <button id="btnImagery" type="button" aria-pressed="false">Imagery</button>
+      <button id="btnDark" class="active" type="button" aria-pressed="true">Dark</button>
     </div>
     <div class="basemap-toggle" role="group" aria-label="Layers">
       <button id="btnScatter" type="button" aria-pressed="false" title="3,694 EGMS points coloured by cutoff velocity">Scatterers</button>
@@ -219,6 +224,11 @@ let EVENT_ASSET = "Carolabrücke";
 let spanPopup = null, scatPopup = null, samPopup = null;
 let SCAT = null, SCAT_V = {}, S1_COORDS = null;
 let MEMO_CUTOFFS = [], memoOpen = false, memoReq = 0;
+let CENTROIDS = {};
+let playing = false, playTimer = null;
+const REDUCED = (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || false;
+const DUR_BRIDGE = REDUCED ? 0 : 400;
+const DUR_DOT = REDUCED ? 0 : 300;
 // Scatterer colour: a paint expression over the joined velocity array at a
 // literal month index (["at", idx, ["get", "v"]]), refreshed with one
 // setPaintProperty per slider tick. The alternative, setFeatureState per
@@ -290,6 +300,98 @@ function closeMemo() {
   updateMemoButton(CUT[cutoffIdx]);
 }
 
+function setBasemap(mode) {
+  const dark = mode !== "imagery";
+  try {
+    if (map && map.getLayer("esri-layer") && map.getLayer("esri-dark-layer")) {
+      map.setLayoutProperty("esri-layer", "visibility", dark ? "none" : "visible");
+      map.setLayoutProperty("esri-dark-layer", "visibility", dark ? "visible" : "none");
+    }
+  } catch (e) {}
+  $("btnImagery").classList.toggle("active", !dark);
+  $("btnDark").classList.toggle("active", dark);
+  $("btnImagery").setAttribute("aria-pressed", !dark ? "true" : "false");
+  $("btnDark").setAttribute("aria-pressed", dark ? "true" : "false");
+  try { localStorage.setItem("radartwin-basemap", dark ? "dark" : "imagery"); } catch (e) {}
+}
+
+function setLayerVisible(btnId, layerId, visible) {
+  try {
+    if (map && map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+    }
+  } catch (e) {}
+  const b = $(btnId);
+  if (b) {
+    b.classList.toggle("active", !!visible);
+    b.setAttribute("aria-pressed", visible ? "true" : "false");
+  }
+}
+
+function updateTicker(cutoff) {
+  const table = DEC[cutoff] || {};
+  const highs = [];
+  for (const bid of Object.keys(ID2NAME)) {
+    const d = table[bid];
+    if (d && d.model && d.model.risk === "high") {
+      const rk = (d.rank === null || d.rank === undefined) ? 999 : d.rank;
+      highs.push({ rank: rk, name: ID2NAME[bid] });
+    }
+  }
+  highs.sort((a, b) => (a.rank - b.rank) || a.name.localeCompare(b.name));
+  const names = highs.map((h) => h.name);
+  $("ticker").textContent =
+    `${monthName(cutoff)} \u00b7 ${highs.length} high \u00b7 ${names.length ? names.join(", ") : "none high"}`;
+}
+
+function collapseMoment() {
+  try { setLayerVisible("btnRadar", "s1-raster", true); } catch (e) {}
+  try { setLayerVisible("btnSam", "sam-lines", true); } catch (e) {}
+  const carolaId = NAME2ID[EVENT_ASSET] || NAME2ID["Carolabrücke"];
+  if (!carolaId || !ID2NAME[carolaId]) return;
+  selectBridge(carolaId, { fly: false });
+  if (!REDUCED && map && CENTROIDS[carolaId]) {
+    try {
+      map.flyTo({ center: CENTROIDS[carolaId], zoom: 15.5, duration: 1500 });
+    } catch (e) {}
+  }
+}
+
+function setPlaying(on) {
+  const btn = $("btnPlay");
+  if (on) {
+    if (cutoffIdx >= CUT.length - 1) {
+      playing = false;
+      btn.textContent = "Play";
+      btn.setAttribute("aria-pressed", "false");
+      return;
+    }
+    playing = true;
+    btn.textContent = "Pause";
+    btn.setAttribute("aria-pressed", "true");
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    playTimer = setInterval(() => {
+      if (cutoffIdx >= CUT.length - 1) {
+        setPlaying(false);
+        collapseMoment();
+        return;
+      }
+      cutoffIdx++;
+      $("slider").value = String(cutoffIdx);
+      applyCutoff();
+      if (cutoffIdx >= CUT.length - 1) {
+        setPlaying(false);
+        collapseMoment();
+      }
+    }, 700);
+  } else {
+    playing = false;
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    btn.textContent = "Play";
+    btn.setAttribute("aria-pressed", "false");
+  }
+}
+
 const $ = (id) => document.getElementById(id);
 const fmt = (v, d) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(d);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -301,6 +403,19 @@ function riskOf(cutoff, bid) {
 }
 
 function initMap() {
+  let basemapPref = "dark";
+  try {
+    const s = localStorage.getItem("radartwin-basemap");
+    if (s === "imagery" || s === "dark") basemapPref = s;
+  } catch (e) {}
+  try {
+    const dark = basemapPref !== "imagery";
+    $("btnImagery").classList.toggle("active", !dark);
+    $("btnDark").classList.toggle("active", dark);
+    $("btnImagery").setAttribute("aria-pressed", !dark ? "true" : "false");
+    $("btnDark").setAttribute("aria-pressed", dark ? "true" : "false");
+  } catch (e) {}
+  const darkInit = basemapPref !== "imagery";
   map = new maplibregl.Map({
     container: "map",
     style: {
@@ -313,16 +428,18 @@ function initMap() {
         esri_dark: { type: "raster",
           tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"],
           tileSize: 256,
+          maxzoom: 16,
           attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors" }
       },
       layers: [
         { id: "esri-layer", type: "raster", source: "esri",
-          paint: { "raster-saturation": -0.7, "raster-contrast": 0.05 } },
+          paint: { "raster-saturation": -0.7, "raster-contrast": 0.05 },
+          layout: { visibility: darkInit ? "none" : "visible" } },
         { id: "esri-dark-layer", type: "raster", source: "esri_dark",
-          layout: { visibility: "none" } }
+          layout: { visibility: darkInit ? "visible" : "none" } }
       ]
     },
-    center: [13.745, 51.057], zoom: 12
+    center: [13.745, 51.057], zoom: REDUCED ? 12 : 11
   });
   map.addControl(new maplibregl.NavigationControl(), "top-left");
   map.on("load", () => {
@@ -358,10 +475,11 @@ function initMap() {
         }
       }
       if (!isFinite(minLon)) continue;
+      const cx = (minLon + maxLon) / 2, cy = (minLat + maxLat) / 2;
+      CENTROIDS[String(f.properties.id)] = [cx, cy];
       centroidFc.features.push({ type: "Feature",
         properties: { id: String(f.properties.id), monitored: f.properties.monitored },
-        geometry: { type: "Point",
-          coordinates: [(minLon + maxLon) / 2, (minLat + maxLat) / 2] } });
+        geometry: { type: "Point", coordinates: [cx, cy] } });
     }
     map.addSource("bridge-centroids", { type: "geojson", data: centroidFc,
       promoteId: "id" });
@@ -378,10 +496,12 @@ function initMap() {
         layout: { visibility: "none" } });
     }
     map.addLayer({ id: "bridges-fill", type: "fill", source: "bridges",
-      paint: { "fill-color": riskExpr, "fill-opacity": 0.38 } });
+      paint: { "fill-color": riskExpr, "fill-opacity": 0.38,
+        "fill-color-transition": { duration: DUR_BRIDGE } } });
     map.addLayer({ id: "bridges-line", type: "line", source: "bridges",
       filter: ["==", ["get", "monitored"], true],
-      paint: { "line-color": riskExpr, "line-width": 2.5 } });
+      paint: { "line-color": riskExpr, "line-width": 2.5,
+        "line-color-transition": { duration: DUR_BRIDGE } } });
     map.addLayer({ id: "bridges-dashed", type: "line", source: "bridges",
       filter: ["==", ["get", "monitored"], false],
       paint: { "line-color": RISK_COLORS.unknown, "line-width": 2,
@@ -394,6 +514,7 @@ function initMap() {
         "circle-color": ["interpolate", ["linear"],
           ["coalesce", ["feature-state", "v"], 0],
           -4, "#2166ac", -2, "#abd9e9", 0, "#f5f5f5", 2, "#fdae61", 4, "#b2182b"],
+        "circle-color-transition": { duration: DUR_DOT },
         "circle-radius": 6, "circle-opacity": 0.92,
         "circle-stroke-color": "#ffffff", "circle-stroke-width": 1 } });
     if (map.getSource("scatterers")) {
@@ -401,16 +522,24 @@ function initMap() {
         source: "scatterers",
         paint: {
           "circle-color": scatterColorExpr(cutoffIdx),
+          "circle-color-transition": { duration: DUR_DOT },
           "circle-radius": 4, "circle-opacity": 0.9,
           "circle-stroke-color": "#ffffff", "circle-stroke-width": 0.75 },
         layout: { visibility: "none" } });
     }
     // City-zoom risk markers above the span dots (phase 5c): 5b left them
     // underneath, so up to 98 mostly white dots covered the coloured markers.
-    // Markers stay last so they sit above every other bridge layer too.
+    // Glow sits directly below the markers; markers stay last so they sit
+    // above every other bridge layer too.
+    map.addLayer({ id: "bridges-glow", type: "circle", source: "bridge-centroids",
+      maxzoom: 15,
+      paint: { "circle-radius": 18, "circle-color": RISK_COLORS.high,
+        "circle-opacity": ["case", ["==", ["feature-state", "risk"], "high"], 0.25, 0],
+        "circle-blur": 1 } });
     map.addLayer({ id: "bridges-markers", type: "circle", source: "bridge-centroids",
       maxzoom: 15,
       paint: { "circle-color": riskExpr, "circle-radius": 8, "circle-opacity": 0.9,
+        "circle-color-transition": { duration: DUR_BRIDGE },
         "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
     map.on("click", "bridges-fill", (e) => {
       if (e.features && e.features.length) selectBridge(String(e.features[0].properties.id));
@@ -461,29 +590,17 @@ function initMap() {
     });
     map.getCanvas().style.cursor = "pointer";
     applyCutoff();
+    if (!REDUCED) {
+      try { map.easeTo({ center: [13.745, 51.057], zoom: 12, duration: 2000 }); } catch (e) {}
+    }
   });
-  $("btnImagery").onclick = () => {
-    map.setLayoutProperty("esri-layer", "visibility", "visible");
-    map.setLayoutProperty("esri-dark-layer", "visibility", "none");
-    $("btnImagery").classList.add("active"); $("btnDark").classList.remove("active");
-    $("btnImagery").setAttribute("aria-pressed", "true");
-    $("btnDark").setAttribute("aria-pressed", "false");
-  };
-  $("btnDark").onclick = () => {
-    map.setLayoutProperty("esri-layer", "visibility", "none");
-    map.setLayoutProperty("esri-dark-layer", "visibility", "visible");
-    $("btnDark").classList.add("active"); $("btnImagery").classList.remove("active");
-    $("btnDark").setAttribute("aria-pressed", "true");
-    $("btnImagery").setAttribute("aria-pressed", "false");
-  };
+  $("btnImagery").onclick = () => setBasemap("imagery");
+  $("btnDark").onclick = () => setBasemap("dark");
   const layerToggle = (btnId, layerId) => {
     $(btnId).onclick = () => {
       if (!map.getLayer(layerId)) return;
       const cur = map.getLayoutProperty(layerId, "visibility") || "visible";
-      const next = cur === "none" ? "visible" : "none";
-      map.setLayoutProperty(layerId, "visibility", next);
-      $(btnId).classList.toggle("active", next === "visible");
-      $(btnId).setAttribute("aria-pressed", next === "visible" ? "true" : "false");
+      setLayerVisible(btnId, layerId, cur === "none");
     };
   };
   layerToggle("btnScatter", "scatterers-circles");
@@ -507,7 +624,9 @@ function applyCutoff() {
   const cutoff = CUT[cutoffIdx];
   $("cutoffLabel").textContent = cutoff;
   $("rankCutoff").textContent = cutoff;
+  $("slider").value = String(cutoffIdx);
   $("slider").setAttribute("aria-valuetext", monthName(cutoff));
+  updateTicker(cutoff);
   // Event badge: only on the cutoff whose month contains the event date.
   // The day count is computed from the dates. The badge slot is always
   // reserved (visibility), so the slider never changes width.
@@ -558,11 +677,24 @@ function renderRanking(cutoff) {
     return ra - rb || ID2NAME[a.bid].localeCompare(ID2NAME[b.bid]);
   });
   const ol = $("ranking");
+  const oldTops = new Map();
+  let focusedBid = null;
+  try {
+    const active = document.activeElement;
+    for (const rowBtn of ol.querySelectorAll(".rankrow")) {
+      const obid = rowBtn.dataset ? rowBtn.dataset.bid : null;
+      if (obid) {
+        oldTops.set(obid, rowBtn.getBoundingClientRect().top);
+        if (active === rowBtn) focusedBid = obid;
+      }
+    }
+  } catch (e) {}
   ol.innerHTML = "";
   for (const { bid, d } of rows) {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.type = "button";
+    btn.dataset.bid = bid;
     btn.className = "rankrow" + (bid === selectedId ? " selected" : "");
     if (bid === selectedId) btn.setAttribute("aria-current", "true");
     const risk = d.model ? d.model.risk : "unknown";
@@ -576,6 +708,29 @@ function renderRanking(cutoff) {
     btn.onclick = () => selectBridge(bid);
     li.appendChild(btn);
     ol.appendChild(li);
+  }
+  if (focusedBid) {
+    try {
+      const nb = ol.querySelector(`.rankrow[data-bid="${focusedBid}"]`);
+      if (nb) {
+        try { nb.focus({ preventScroll: true }); } catch (e2) { nb.focus(); }
+      }
+    } catch (e) {}
+  }
+  if (!REDUCED && oldTops.size) {
+    try {
+      for (const rowBtn of ol.querySelectorAll(".rankrow")) {
+        const nbid = rowBtn.dataset ? rowBtn.dataset.bid : null;
+        const oldTop = nbid ? oldTops.get(nbid) : undefined;
+        if (oldTop === undefined) continue;
+        const dy = oldTop - rowBtn.getBoundingClientRect().top;
+        if (dy) {
+          rowBtn.animate(
+            [{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }],
+            { duration: 350, easing: "cubic-bezier(0.2,0,0.2,1)" });
+        }
+      }
+    } catch (e) {}
   }
 }
 
@@ -706,12 +861,33 @@ function renderDetail(cutoff, bid) {
     ${ownerHtml}`;
 }
 
-function selectBridge(bid) {
+function selectBridge(bid, opts) {
   if (!ID2NAME[bid]) return;
+  const already = (bid === selectedId);
   selectedId = bid;
   renderRanking(CUT[cutoffIdx]);
   renderDetail(CUT[cutoffIdx], bid);
-  $("detail").scrollIntoView({ block: "nearest" });
+  const sideEl = $("side");
+  const detailEl = $("detail");
+  const isPhoneLayout = window.matchMedia && window.matchMedia("(max-width: 700px)").matches;
+  if (isPhoneLayout) {
+    detailEl.scrollIntoView({ block: "nearest" });
+  } else if (sideEl && detailEl) {
+    const sideRect = sideEl.getBoundingClientRect();
+    const detailRect = detailEl.getBoundingClientRect();
+    const overTop = detailRect.top - sideRect.top;
+    const overBottom = detailRect.bottom - sideRect.bottom;
+    const padTop = parseFloat(getComputedStyle(sideEl).paddingTop) || 0;
+    if (detailRect.height > sideRect.height || overTop < 0) sideEl.scrollTop += overTop - padTop;
+    else if (overBottom > 0) sideEl.scrollTop += overBottom;
+  }
+  const skipFly = opts && opts.fly === false;
+  if (!already && !skipFly && map && CENTROIDS[bid]) {
+    try {
+      if (REDUCED) map.jumpTo({ center: CENTROIDS[bid], zoom: 15 });
+      else map.flyTo({ center: CENTROIDS[bid], zoom: 15, duration: 1200 });
+    } catch (e) {}
+  }
 }
 
 async function boot() {
@@ -747,7 +923,11 @@ async function boot() {
   cutoffIdx = CUT.length - 1;
   const slider = $("slider");
   slider.min = "0"; slider.max = String(CUT.length - 1); slider.value = String(cutoffIdx);
-  slider.oninput = () => { cutoffIdx = Number(slider.value); applyCutoff(); };
+  slider.oninput = () => {
+    if (playing) setPlaying(false);
+    cutoffIdx = Number(slider.value); applyCutoff();
+  };
+  $("btnPlay").onclick = () => setPlaying(!playing);
   initMap();
   applyCutoff();
 }

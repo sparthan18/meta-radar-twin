@@ -193,6 +193,14 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 - **What you see:** at 375 px the month slider shows a thumb but no track. The row is `nowrap`, and the "Month" label, the fixed-width date and the always-reserved collapse badge (170 px, hidden with `visibility`, so still in layout) add up to the whole row; the range input computes to 0 px.
 - **Fix:** below 700 px let the row wrap, put the badge on its own full-width line (`flex: 0 0 100%`, so its space is still reserved and showing it changes nothing but visibility), and give the input a basis (`flex: 1 1 150px`). Check by reading the input's width in the browser, not by looking: the thumb still draws at 0 px.
 
+### Esri's dark canvas runs out at zoom 16 over Dresden, and MapLibre asks one level deeper
+- **What you see:** flying to zoom 15.5 on `Canvas/World_Dark_Gray_Base` fills half the view with "Map data not yet available" tiles. Probed: every zoom-17 tile around Carolabrücke is the same 2,521-byte placeholder, while zoom 16 has real 7–13 KB tiles. MapLibre requests zoom z+1 for a 256 px raster source, so map zoom 15.5 asks for zoom 17.
+- **Fix:** `maxzoom: 16` on the raster source; MapLibre then overzooms the zoom-16 tiles. World Imagery has real zoom-17 tiles and needs no cap.
+
+### scrollIntoView scrolls the window as well as the panel
+- **What you see:** selecting a bridge calls `scrollIntoView` on the detail; at desktop width the page itself scrolls 28 px and the title is clipped, because every scrollable ancestor moves. Scrolling "just enough" to show the detail's bottom then hides its heading when the detail is taller than the panel.
+- **Fix:** at desktop width set `#side.scrollTop` yourself; align the detail's top when it is taller than the panel. Keep `scrollIntoView` only for the phone layout, where the page is meant to scroll.
+
 ## Environment
 
 - Python 3.14 has no wheels for rasterio or geopandas, so the project pins 3.12.

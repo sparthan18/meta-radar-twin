@@ -1,0 +1,9 @@
+Phase 5e fix: two defects found when the phase 5e replay was played in a real browser at 1280×800. Change only web/index.html. Do not touch web/data/, scripts/ or out/.
+
+1. Watermark tiles in the collapse close-up. At the collapse moment the map flies to zoom 15.5 on the dark basemap, and the right half of the view shows Esri's "Map data not yet available" placeholder tiles. Measured: Esri's Canvas/World_Dark_Gray_Base has real tiles over Dresden up to zoom 16 (7–13 KB each) and only 2.5 KB placeholders at zoom 17; MapLibre requests zoom 17 tiles for a 256 px raster source at map zoom 15.5. Fix: give the `esri_dark` raster source `maxzoom: 16`, so MapLibre overzooms the zoom-16 tiles instead of requesting zoom 17. Leave the imagery source as it is (its zoom-17 tiles are real). Report the source definition after the change.
+
+2. The page scrolls during selection. After the collapse moment `window.scrollY` is 28 px, so the page title is clipped; `selectBridge` calls `scrollIntoView` on the detail, which scrolls every scrollable ancestor including the window. Fix: scroll only the side panel (`#side`), computing the detail's offset inside it and setting `#side.scrollTop`, or calling `scrollIntoView` only when the window cannot scroll. At phone width (where the page itself scrolls, phase 5d) the current behaviour must stay, because there the detail is below the fold by design. Say how you distinguished the two cases.
+
+Prove what you can from the code and the arithmetic; you have no browser. The reviewer will replay to the end at 1280×800 and read `window.scrollY` and the requested tile zoom.
+
+Standing rules: no spend, no network, no installs, no commits, no background jobs, no `&`. Do not change any wording, threshold or data. Call the build steps "phases". Finish with the diff and a sentence per item on how you verified it.
