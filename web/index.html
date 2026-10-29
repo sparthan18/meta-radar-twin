@@ -245,6 +245,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
     <div id="caption"></div>
     <div id="captionLive" class="visually-hidden" aria-live="polite"></div>
     <div id="sceneTag" hidden></div>
+    <div id="deckHud" hidden aria-live="polite"></div>
     <div id="storyCallouts"></div>
     <div id="dateRoll" hidden></div>
     <div id="storyEnd" hidden>
@@ -292,6 +293,8 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 <script src="annotate.js"></script>
 <script src="memo.js"></script>
 <script src="explainer.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script src="deck3d.js"></script>
 <script>
 "use strict";
 const RISK_COLORS = { none: "#4b5563", watch: "#eab308", elevated: "#f97316",
@@ -556,6 +559,88 @@ function updateExploreCallouts(cutoff) {
   try { AnnotateSetCallouts(list); } catch (e) { /* ignore */ }
 }
 
+// Explore close-up (phase 7d): when a bridge is selected and the zoom is
+// at or above 14, the 3D deck shows for that bridge and follows the
+// slider; below 14 the markers and fills are enough. The rings and the
+// HUD data block share the same close-up condition. On the phone layout
+// the deck and rings stay off (the detail panel's side view carries the
+// deck) while the HUD collapses to two lines via CSS. Story mode owns
+// the same layer itself, so this only runs in Explore.
+function exploreDeckBearing(bid) {
+  try {
+    if (typeof deckAxisBearing !== "function") return 0;
+    const f = (BRIDGES || []).find((x) => x && x.properties &&
+      String(x.properties.id) === String(bid));
+    if (!f || !f.geometry) return 0;
+    const g = f.geometry;
+    let ring = null;
+    if (g.type === "Polygon" && g.coordinates && g.coordinates[0]) {
+      ring = g.coordinates[0];
+    } else if (g.type === "MultiPolygon" && g.coordinates && g.coordinates[0]) {
+      ring = g.coordinates[0][0];
+    }
+    if (!ring) return 0;
+    return deckAxisBearing(ring);
+  } catch (e) { return 0; }
+}
+
+function exploreRingRadii() {
+  try {
+    if (typeof DECK_RING_RADII_M !== "undefined" && DECK_RING_RADII_M) {
+      return DECK_RING_RADII_M.slice(0, 2);
+    }
+  } catch (e) { /* fall through */ }
+  return [250, 300];
+}
+
+function updateExploreDeck() {
+  try {
+    if (document.body.dataset.mode === "story") return;
+    if (!map || !CUT.length) return;
+  } catch (e) { return; }
+  const bid = selectedId;
+  let zoom = 0;
+  try { zoom = map.getZoom(); } catch (e) { zoom = 0; }
+  const closeUp = !!(bid && ID2NAME[bid] && zoom >= 14);
+  let phone = false;
+  try {
+    phone = !!(window.matchMedia &&
+      window.matchMedia("(max-width: 700px)").matches);
+  } catch (e) { phone = false; }
+  if (!closeUp) {
+    try { if (typeof Deck3DHide === "function") Deck3DHide(map); } catch (e) {}
+    try { if (typeof AnnotateClearRings === "function") AnnotateClearRings(); } catch (e) {}
+    try { if (typeof AnnotateClearHud === "function") AnnotateClearHud(); } catch (e) {}
+    return;
+  }
+  const cutoff = CUT[cutoffIdx];
+  const d = ((DEC[cutoff] || {})[bid]) || {};
+  const risk = (d.model && d.model.risk) || "unknown";
+  try {
+    if (typeof AnnotateSetHud === "function") {
+      AnnotateSetHud({ name: ID2NAME[bid] || bid, cutoff,
+        rank: d.rank, n: N_MONITORED, z: d.z, risk });
+    }
+  } catch (e) { /* ignore */ }
+  if (phone) {
+    try { if (typeof Deck3DHide === "function") Deck3DHide(map); } catch (e) {}
+    try { if (typeof AnnotateClearRings === "function") AnnotateClearRings(); } catch (e) {}
+    return;
+  }
+  try {
+    if (typeof Deck3DShow === "function" && CENTROIDS[bid]) {
+      Deck3DShow(map, { bid, spans: SPANS[bid] || [], cutoffIdx,
+        lenM: (BRIDGE_PROPS[bid] || {}).len_m, centroid: CENTROIDS[bid],
+        risk, axisBearing: exploreDeckBearing(bid), tweenMs: 0 });
+    }
+  } catch (e) { /* the side view is the fallback, never fatal */ }
+  try {
+    if (typeof AnnotateSetRings === "function" && CENTROIDS[bid]) {
+      AnnotateSetRings(CENTROIDS[bid][0], CENTROIDS[bid][1], exploreRingRadii());
+    }
+  } catch (e) { /* ignore */ }
+}
+
 function setPlaying(on) {
   const btn = $("btnPlay");
   if (on) {
@@ -638,7 +723,7 @@ function initMap() {
           layout: { visibility: darkInit ? "visible" : "none" } }
       ]
     },
-    center: [13.745, 51.057], zoom: REDUCED ? 12 : 11, pitch: 55
+    center: [13.745, 51.057], zoom: REDUCED ? 12 : 11, pitch: 55, maxPitch: 75
   });
   map.addControl(new maplibregl.NavigationControl(), "top-left");
   map.on("load", () => {
@@ -801,6 +886,12 @@ function initMap() {
         AnnotateInit(map, document.getElementById("map"));
       }
     } catch (e) { /* annotation layer is a nicety, never fatal */ }
+    try {
+      // The Explore close-up (7d) depends on the zoom: re-evaluate after
+      // every move (fly, zoom, pitch) and every viewport resize.
+      map.on("moveend", () => { try { updateExploreDeck(); } catch (e) {} });
+      window.addEventListener("resize", () => { try { updateExploreDeck(); } catch (e) {} });
+    } catch (e) { /* ignore */ }
     applyCutoff();
     if (!REDUCED) {
       try { map.easeTo({ center: [13.745, 51.057], zoom: 12, duration: 2000 }); } catch (e) {}
@@ -883,6 +974,7 @@ function applyCutoff() {
       const hs = $("historyStrip");
       if (hs) hs.removeAttribute("hidden");
       updateExploreCallouts(cutoff);
+      updateExploreDeck();
     }
   } catch (e) { /* ignore */ }
 }
@@ -1162,6 +1254,7 @@ function selectBridge(bid, opts) {
       else map.flyTo({ center: CENTROIDS[bid], zoom: 15, duration: 1200 });
     } catch (e) {}
   }
+  try { updateExploreDeck(); } catch (e) { /* ignore */ }
 }
 
 async function boot() {

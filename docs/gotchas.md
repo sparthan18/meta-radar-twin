@@ -209,6 +209,14 @@ Each entry: **what you see**, **why**, **fix or workaround**.
 - **What you see:** reviewing the story in a browser tab that is not in front, nothing advances: no orbit, captions late, the same scene for a minute, while seeking works. GSAP's ticker runs on `requestAnimationFrame`, which browsers pause for hidden tabs; `setInterval` (the old replay) only slows down.
 - **Fix:** test the story in the fronted tab with the window visible, and read state from the DOM. The page is fine; the test was not.
 
+### `getStyle()` does not list custom layers
+- **What you see:** a three.js custom layer added with `map.addLayer` is missing from `map.getStyle().layers`, so a check that counts `type === "custom"` reports nothing and the deck looks absent.
+- **Fix:** ask the style's layer table (`map.getLayer(id)` or `map.style._layers`), which has it; `getStyle()` serialises only style-spec layers.
+
+### Pitch above 60 needs `maxPitch`
+- **What you see:** a scene asks for pitch 65 and the map reads 60; no error. MapLibre clamps to the map's `maxPitch`, default 60.
+- **Fix:** set `maxPitch` in the map options (75 here). Also: a camera mode that "keeps the centre" must still set it for seeks, or a chapter click lands with the subject at the frame's edge.
+
 ## Environment
 
 - Python 3.14 has no wheels for rasterio or geopandas, so the project pins 3.12.

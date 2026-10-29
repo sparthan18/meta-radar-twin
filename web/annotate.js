@@ -264,6 +264,18 @@ let annotateDrawn = {};
 let annotateLastView = "";
 let annotateSam = null; // {ring: [[lon,lat]...], label: string} or null
 let annotateSamDrawn = false;
+let annotateRings = null; // {lon, lat, radii:[m...]} or null (phase 7d HUD)
+let annotateRingAngles = [0, 0];
+let annotateRingCenter = null; // {x, y} of the last ring draw
+let annotateRingTicking = false;
+let annotateRingTimer = null;
+
+function annotatePhone() {
+  try {
+    return !!(typeof window !== "undefined" && window.matchMedia &&
+      window.matchMedia("(max-width: 700px)").matches);
+  } catch (e) { return false; }
+}
 
 function annotateReduced() {
   try {
@@ -419,6 +431,115 @@ function AnnotateUpdate() {
   if (annotateSam) {
     try { annotateDrawSam(w, h); } catch (e) { /* ignore */ }
   }
+  if (annotateRings) {
+    try { annotateDrawRings(w, h); } catch (e) { /* ignore */ }
+  }
+}
+
+// Phase 7d HUD rings: two thin circles about the bridge centroid at fixed
+// metre radii (so they scale with zoom). The metre-to-pixel scale comes
+// from the map projection itself (an eastward offset of radii metres),
+// so pitch and bearing are honoured the same way the leader lines are.
+// Dashed strokes make the slow counter-rotation visible; under reduced
+// motion the angles stay at 0.
+function annotateMetresToPx(lon, lat, metres) {
+  const p0 = annotateProject(lon, lat);
+  if (!p0) return null;
+  const cosLat = Math.cos(Number(lat) * Math.PI / 180);
+  if (!(cosLat > 0.01)) return null;
+  const p1 = annotateProject(Number(lon) + Number(metres) / (111320 * cosLat),
+    Number(lat));
+  if (!p1) return null;
+  return Math.hypot(p1.x - p0.x, p1.y - p0.y);
+}
+
+function annotateDrawRings(mapW, mapH) {
+  if (!annotateRings || !annotateSvg) return;
+  const c = annotateProject(annotateRings.lon, annotateRings.lat);
+  if (!c) return;
+  if (c.x < -400 || c.y < -400 || c.x > mapW + 400 || c.y > mapH + 400) return;
+  annotateRingCenter = { x: c.x, y: c.y };
+  const radii = annotateRings.radii || [];
+  for (let i = 0; i < radii.length && i < 2; i++) {
+    const rp = annotateMetresToPx(annotateRings.lon, annotateRings.lat,
+      radii[i]);
+    if (!(rp > 2)) continue;
+    const g = annotateSvgEl("g", { "class": "annotate-ring",
+      "data-ring": String(i),
+      transform: `rotate(${annotateRingAngles[i] || 0} ${c.x.toFixed(1)} ${c.y.toFixed(1)})` });
+    const circle = annotateSvgEl("circle", {
+      cx: c.x.toFixed(1), cy: c.y.toFixed(1), r: rp.toFixed(1),
+      "class": i === 0 ? "annotate-ring-1" : "annotate-ring-2"
+    });
+    g.appendChild(circle);
+    annotateSvg.appendChild(g);
+  }
+}
+
+// Slow counter-rotation (about 8°/s and −6°/s). Updates the drawn groups'
+// transforms in place, so idle rotation never triggers a full redraw;
+// the next AnnotateUpdate (pan, zoom, tilt) redraws at the new centre
+// with the current angles. Never started under reduced motion.
+function annotateTickRings(dtMs) {
+  if (!annotateRings || !annotateSvg) return;
+  if (annotateReduced()) return;
+  const dt = (Number(dtMs) > 0) ? Number(dtMs) : 50;
+  annotateRingAngles[0] = (annotateRingAngles[0] + 8 * dt / 1000) % 360;
+  annotateRingAngles[1] = (annotateRingAngles[1] - 6 * dt / 1000) % 360;
+  const cc = annotateRingCenter;
+  if (!cc) return;
+  let groups = null;
+  try {
+    groups = annotateSvg.querySelectorAll(".annotate-ring");
+  } catch (e) { groups = null; }
+  if (!groups) return;
+  for (const g of Array.from(groups)) {
+    const i = Number(g.getAttribute("data-ring")) || 0;
+    try {
+      g.setAttribute("transform",
+        `rotate(${annotateRingAngles[i] || 0} ${cc.x.toFixed(1)} ${cc.y.toFixed(1)})`);
+    } catch (e) { /* ignore */ }
+  }
+}
+
+function annotateStartRingTicker() {
+  if (annotateRingTicking) return;
+  if (annotateReduced()) return;
+  annotateRingTicking = true;
+  try {
+    if (annotateHasGsap() && gsap.ticker) {
+      let last = null;
+      const cb = (time) => {
+        if (!annotateRings) { last = null; return; }
+        const now = Number(time) * 1000;
+        const dt = (last === null) ? 50 : Math.min(250, now - last);
+        last = now;
+        annotateTickRings(dt);
+      };
+      cb._annotateRings = true;
+      annotateRingTimer = cb;
+      gsap.ticker.add(cb);
+      return;
+    }
+  } catch (e) { /* fall through to setInterval */ }
+  try {
+    annotateRingTimer = setInterval(() => annotateTickRings(50), 50);
+  } catch (e) { annotateRingTimer = null; }
+}
+
+function annotateStopRingTicker() {
+  annotateRingTicking = false;
+  try {
+    if (annotateRingTimer) {
+      if (annotateHasGsap() && gsap.ticker &&
+          typeof annotateRingTimer === "function") {
+        gsap.ticker.remove(annotateRingTimer);
+      } else {
+        clearInterval(annotateRingTimer);
+      }
+    }
+  } catch (e) { /* ignore */ }
+  annotateRingTimer = null;
 }
 
 // Scene-7 SAM outline: the polygon ring projected to screen, drawn with a
@@ -515,6 +636,15 @@ function AnnotateClear(prefix) {
     annotateDrawn = {};
     annotateSam = null;
     annotateSamDrawn = false;
+    annotateRings = null;
+    annotateRingAngles = [0, 0];
+    annotateRingCenter = null;
+    annotateStopRingTicker();
+    try {
+      const hud = (typeof document !== "undefined")
+        ? document.getElementById("deckHud") : null;
+      if (hud) hud.setAttribute("hidden", "");
+    } catch (e) { /* ignore */ }
   } else {
     annotateCallouts = annotateCallouts.filter((c) => String(c.id).indexOf(prefix) !== 0);
     for (const k of Object.keys(annotateDrawn)) {
@@ -544,6 +674,100 @@ function AnnotateClearSam() {
   annotateSeq++;
   annotateLastView = "";
   AnnotateUpdate();
+}
+
+// Phase 7d HUD rings (close-up: story scenes 5-6, Explore at zoom ≥ 14).
+// Off on the phone layout. Rotation starts unless reduced motion is set.
+function AnnotateSetRings(lon, lat, radiiM) {
+  if (annotatePhone()) {
+    AnnotateClearRings();
+    return;
+  }
+  const radii = (radiiM || []).slice(0, 2).map(Number).filter((r) => r > 0);
+  if (!radii.length || lon === null || lon === undefined ||
+      lat === null || lat === undefined) {
+    AnnotateClearRings();
+    return;
+  }
+  annotateRings = { lon: Number(lon), lat: Number(lat), radii };
+  annotateSeq++;
+  annotateLastView = "";
+  annotateStartRingTicker();
+  AnnotateUpdate();
+}
+
+function AnnotateClearRings() {
+  annotateRings = null;
+  annotateRingAngles = [0, 0];
+  annotateRingCenter = null;
+  annotateStopRingTicker();
+  annotateSeq++;
+  annotateLastView = "";
+  AnnotateUpdate();
+}
+
+// Phase 7d HUD data block: four sparse lines from the bound month's data
+// only (name, cutoff, rank/z, worry word with the technical term in small
+// print). aria-live="polite", updated once per call — callers set it once
+// per month change so it announces once. Nothing inside is focusable.
+function AnnotateSetHud(data) {
+  if (typeof document === "undefined") return;
+  const d = data || {};
+  let box = null;
+  try { box = document.getElementById("deckHud"); } catch (e) { box = null; }
+  if (!box) {
+    try {
+      const host = annotateBox ||
+        document.getElementById("map") || document.body;
+      if (!host) return;
+      box = document.createElement("div");
+      box.id = "deckHud";
+      box.setAttribute("aria-live", "polite");
+      host.appendChild(box);
+    } catch (e) { return; }
+  }
+  let lines = null;
+  try {
+    if (typeof hudLinesFor === "function") {
+      lines = hudLinesFor(d.name, d.cutoff, d.rank, d.n, d.z, d.risk);
+    }
+  } catch (e) { lines = null; }
+  if (!lines) {
+    // Fallback when deck3d.js failed to load: same four lines, same
+    // worry words, computed locally.
+    const worry = (r) => r === "high" ? "send an inspector"
+      : r === "elevated" ? "look closer"
+      : r === "watch" ? "keep watching"
+      : r === "none" ? "fine" : "not monitored";
+    const tech = (d.risk === "high" || d.risk === "elevated" ||
+      d.risk === "watch" || d.risk === "none") ? d.risk : "unknown";
+    const r = (d.rank === null || d.rank === undefined) ? "—" : String(d.rank);
+    const nn = (d.n === null || d.n === undefined) ? "—" : String(d.n);
+    const zz = (d.z === null || d.z === undefined || Number.isNaN(Number(d.z)))
+      ? "—" : Number(d.z).toFixed(2);
+    lines = { lines: [String(d.name), String(d.cutoff),
+      `rank ${r} of ${nn} · z ${zz}`, worry(d.risk)], tech };
+  }
+  const escHud = (s) => String(s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  try {
+    const L = lines.lines || [];
+    box.innerHTML =
+      `<div class="hud-name">${escHud(L[0] || "")}</div>` +
+      `<div class="hud-cutoff">${escHud(L[1] || "")}</div>` +
+      `<div class="hud-rank">${escHud(L[2] || "")}</div>` +
+      `<div class="hud-risk">${escHud(L[3] || "")} ` +
+      `<small>${escHud(lines.tech || "")}</small></div>`;
+    box.removeAttribute("hidden");
+  } catch (e) { /* ignore */ }
+}
+
+function AnnotateClearHud() {
+  try {
+    const box = (typeof document !== "undefined")
+      ? document.getElementById("deckHud") : null;
+    if (box) box.setAttribute("hidden", "");
+  } catch (e) { /* ignore */ }
 }
 
 // Tween a counter's text from one rank/z to another. Under reduced motion

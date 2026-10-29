@@ -287,7 +287,7 @@ function buildScenes(ctx) {
       ],
       duration: D(10, 9.5), waitFor: ["tiles"] },
     { id: "september", cutoff: last,
-      camera: { mode: "step", orbit: 20 },
+      camera: { mode: "step", orbit: 20, zoom: 15.7, pitch: 65 },
       layers: { basemap: "imagery" }, overlay: "counter",
       captions: [
         { text: "{month}. The only red bridge in the city.", at: 0.5, hold: 5.5 },
@@ -381,6 +381,20 @@ function storyOrbitBearing(totalDeg, spanSec, localT) {
   if (!(span > 0)) return 0;
   const frac = Math.max(0, Math.min(1, Number(localT) / span));
   return (Number(totalDeg) || 0) * frac;
+}
+
+// Step camera patch (scene 6): the jumpTo patch for a "step" camera,
+// carrying the scene's bridge centroid as well as zoom, pitch and
+// bearing 0, so a seek lands on the same framing as natural play.
+// centroid is [lon, lat] (null when unknown: the patch keeps the
+// current centre, the pre-7d behaviour).
+function stepCameraPatch(camera, centroid) {
+  const c = camera || {};
+  const patch = { bearing: 0 };
+  if (c.zoom !== undefined) patch.zoom = c.zoom;
+  if (c.pitch !== undefined) patch.pitch = c.pitch;
+  if (centroid) patch.center = centroid.slice ? centroid.slice() : centroid;
+  return patch;
 }
 
 // Scene-4 replay guard: a month beyond the revealed position may only be
@@ -877,10 +891,29 @@ function storyApplyCamera(sc, cut) {
       return;
     }
     if (c.mode === "step") {
-      // One step: hold position and reset the bearing. The scene-6 orbit
-      // tween on the sub-timeline (plus the playhead sync) drives the
-      // bearing from here, so every entry starts from a known 0.
-      try { if (map.jumpTo) map.jumpTo({ bearing: 0 }); } catch (e) { /* ignore */ }
+      // One step: centre the scene's bridge and reset the bearing. The
+      // scene-6 orbit tween on the sub-timeline (plus the playhead sync)
+      // drives the bearing from here, so every entry starts from a known
+      // 0. Scene 6 also ends lower and steeper (7d: zoom 15.7, pitch 65)
+      // so the 3D deck's tilt reads. The jumpTo carries the centroid, so
+      // a seek lands on the same framing as natural play; playing 5 into
+      // 6 is still one continuous shot (the centroid is already the
+      // centre). Falls back to Carolabrücke, like "bridge" mode.
+      try {
+        if (map.jumpTo) {
+          let centroid = null;
+          try {
+            let id = null;
+            if (typeof NAME2ID !== "undefined" && NAME2ID) {
+              id = NAME2ID[c.bridge] || NAME2ID["Carolabrücke"] || null;
+            }
+            if (id && typeof CENTROIDS !== "undefined" && CENTROIDS && CENTROIDS[id]) {
+              centroid = CENTROIDS[id];
+            }
+          } catch (e) { centroid = null; }
+          map.jumpTo(stepCameraPatch(c, centroid));
+        }
+      } catch (e) { /* ignore */ }
       return;
     }
     const CITY = [13.745, 51.057];
@@ -997,6 +1030,121 @@ function storyShowSideView(monthIdx) {
 
 function storyHideSideView() {
   storyShow(storyEl("sceneSideView"), false);
+}
+
+// ---------- Phase 7d: 3D deck + HUD for scenes 5-6 ----------
+
+// Long-axis bearing for a bridge id from the dashboard's bridge polygons.
+function storyAxisBearing(bid) {
+  try {
+    if (typeof deckAxisBearing !== "function") return 0;
+    if (typeof BRIDGES === "undefined" || !BRIDGES) return 0;
+    const f = BRIDGES.find((x) => x && x.properties &&
+      String(x.properties.id) === String(bid));
+    if (!f || !f.geometry) return 0;
+    const g = f.geometry;
+    let ring = null;
+    if (g.type === "Polygon" && g.coordinates && g.coordinates[0]) {
+      ring = g.coordinates[0];
+    } else if (g.type === "MultiPolygon" && g.coordinates && g.coordinates[0]) {
+      ring = g.coordinates[0][0];
+    }
+    if (!ring) return 0;
+    return deckAxisBearing(ring);
+  } catch (e) { return 0; }
+}
+
+function storyRingRadii() {
+  try {
+    if (typeof DECK_RING_RADII_M !== "undefined" && DECK_RING_RADII_M) {
+      return DECK_RING_RADII_M.slice(0, 2);
+    }
+  } catch (e) { /* fall through */ }
+  return [250, 300];
+}
+
+// Show Carolabrücke's deck, rings and HUD for the scene's bound month.
+// Reads only that month's spans and decisions. Scene 6 retargets the
+// August deck with a 600 ms height tween (instant under reduced motion);
+// any other entry shows the month's heights directly. On the phone
+// layout the deck and rings stay off (the side view carries the deck)
+// but the HUD still shows, collapsed to two lines by CSS.
+function storyDeckShowForScene(sc) {
+  if (!sc) return;
+  const bid = storyCarolaId();
+  if (!bid) return;
+  const midx = storyCutoffIndexOf(sc.cutoff);
+  let d = {}, cname = bid, n = 19;
+  try {
+    if (typeof CUT !== "undefined" && CUT && typeof DEC !== "undefined" && DEC) {
+      d = (DEC[CUT[midx]] || {})[bid] || {};
+    }
+    if (typeof ID2NAME !== "undefined" && ID2NAME) cname = ID2NAME[bid] || bid;
+    if (typeof N_MONITORED !== "undefined") n = N_MONITORED;
+  } catch (e) { /* defaults stand */ }
+  const risk = (d.model && d.model.risk) || "unknown";
+  const isSeptember = sc.id === "september";
+  try {
+    if (typeof Deck3DShow === "function" &&
+        typeof SPANS !== "undefined" && SPANS) {
+      let lenM = null;
+      try {
+        if (typeof BRIDGE_PROPS !== "undefined" && BRIDGE_PROPS &&
+            BRIDGE_PROPS[bid]) {
+          lenM = BRIDGE_PROPS[bid].len_m;
+        }
+      } catch (e) { /* ignore */ }
+      let centroid = null;
+      try {
+        if (typeof CENTROIDS !== "undefined" && CENTROIDS) {
+          centroid = CENTROIDS[bid] || null;
+        }
+      } catch (e) { /* ignore */ }
+      if (centroid && typeof map !== "undefined" && map) {
+        let showing = null;
+        try {
+          if (typeof Deck3DIsShowing === "function") {
+            showing = Deck3DIsShowing();
+          }
+        } catch (e) { showing = null; }
+        if (isSeptember && showing === String(bid) &&
+            typeof Deck3DUpdate === "function") {
+          Deck3DUpdate(map, midx, { tweenMs: 600 });
+        } else {
+          Deck3DShow(map, { bid, spans: SPANS[bid] || [], cutoffIdx: midx,
+            lenM, centroid, risk, axisBearing: storyAxisBearing(bid),
+            tweenMs: 0 });
+        }
+      }
+    }
+  } catch (e) { /* the side view is the fallback, never fatal */ }
+  try {
+    if (typeof CENTROIDS !== "undefined" && CENTROIDS && CENTROIDS[bid] &&
+        typeof AnnotateSetRings === "function") {
+      AnnotateSetRings(CENTROIDS[bid][0], CENTROIDS[bid][1], storyRingRadii());
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    if (typeof AnnotateSetHud === "function") {
+      AnnotateSetHud({ name: cname, cutoff: sc.cutoff, rank: d.rank,
+        n, z: d.z, risk });
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function storyDeckHide() {
+  try {
+    if (typeof Deck3DHide === "function" &&
+        typeof map !== "undefined" && map) {
+      Deck3DHide(map);
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    if (typeof AnnotateClearRings === "function") AnnotateClearRings();
+  } catch (e) { /* ignore */ }
+  try {
+    if (typeof AnnotateClearHud === "function") AnnotateClearHud();
+  } catch (e) { /* ignore */ }
 }
 
 function storyEsc(s) {
@@ -1658,6 +1806,13 @@ function storyApplySceneState(i) {
       }
     } catch (e) { /* ignore */ }
   }
+  // Scenes 5-6: the 3D deck, rings and HUD for the bound month; every
+  // other scene hides them, so seeks always land on correct state.
+  if (sc.id === "august" || sc.id === "september") {
+    try { storyDeckShowForScene(sc); } catch (e) { /* ignore */ }
+  } else {
+    try { storyDeckHide(); } catch (e) { /* ignore */ }
+  }
   // Scene 7: memo typing + S2 chip + SAM outline (token-guarded fetches).
   if (sc.id === "the-report") {
     try { storyFetchMemo(sc.cutoff, my); } catch (e) { /* ignore */ }
@@ -2021,6 +2176,7 @@ function storyBuildMaster() {
   storyRemoveS2();
   storyRemoveSam();
   storyRemoveEurope();
+  try { storyDeckHide(); } catch (e) { /* ignore */ }
   storyHideCaption();
   storyMaster = gsap.timeline({ paused: true,
     onUpdate: storyOnMasterUpdate, onComplete: storyOnComplete });
@@ -2244,6 +2400,11 @@ function storyTogglePlay() {
 function storyHideOverlays() {
   storyHideCaption();
   storyClearCallouts();
+  try { storyDeckHide(); } catch (e) { /* ignore */ }
+  // 7d fix: entering Explore hides the landing too (every Explore route
+  // funnels through storySetMode("explore")); storyWatch brings it back
+  // when the story never started.
+  storyHideLanding();
   storyShow(storyEl("sceneTag"), false);
   storyShow(storyEl("sceneTitle"), false);
   storyShow(storyEl("sceneCover"), false);
@@ -2313,7 +2474,13 @@ function storyWatch() {
   try {
     if (typeof window !== "undefined" && !window.__storyReady && !storyInit()) return;
   } catch (e) { return; }
+  // 7d fix: when the story never started (e.g. Escape from the landing
+  // to Explore), bring the landing back instead of auto-playing. Show it
+  // before the resync so the tag/title sync sees the unstarted state.
+  const idle = storyState === "idle";
+  if (idle) storyShow(storyEl("storyLanding"), true);
   storySetMode("story");
+  if (idle) return;
   if (storyState === "paused") storyPlay();
   else storyReplay();
 }
@@ -2502,6 +2669,7 @@ if (typeof module !== "undefined" && module.exports) {
     firstLevelHits, buildScenes, sceneBounds,
     totalDuration, sceneIndexAtTime, scene4Allowed, captionDataFor,
     captionIndexAtLocalTime, captionAtTime, storyOrbitBearing,
+    stepCameraPatch,
     memoTypedChars, memoHighlightRange, revealedCount, renderedTextLength,
     revealNodes, renderedHighlightRange, proofCountValue, proofChecksShown,
     europeLitCount,

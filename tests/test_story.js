@@ -11,6 +11,7 @@ const {
   firstLevelHits, buildScenes, sceneBounds, totalDuration,
   sceneIndexAtTime, scene4Allowed, captionDataFor,
   captionIndexAtLocalTime, captionAtTime, storyOrbitBearing,
+  stepCameraPatch,
   memoTypedChars, memoHighlightRange, revealedCount, renderedTextLength,
   revealNodes, renderedHighlightRange, proofCountValue, proofChecksShown,
   europeLitCount
@@ -519,6 +520,35 @@ check("europe dots all lit under reduced motion",
   europeLitCount(0, 15, 14, true) === 0);
 check("planted: instant europe light-up is caught",
   europeLitCount(0, 15, 14, false) !== 15);
+
+// --- phase 7d: close-up camera, captions unchanged ---
+check("7d scene-5 fly-in ends at pitch 60, zoom 15",
+  scenes[4].camera.pitch === 60 && scenes[4].camera.zoom === 15);
+check("7d scene-6 orbit stays 20 deg",
+  scenes[5].camera.orbit === 20);
+check("7d scene-6 ends lower and steeper (zoom 15.7, pitch 65)",
+  scenes[5].camera.zoom === 15.7 && scenes[5].camera.pitch === 65);
+check("planted: scene-6 old framing is caught",
+  scenes[5].camera.zoom !== 15 && scenes[5].camera.pitch !== 60);
+check("7d scene-5 captions unchanged",
+  scenes[4].captions.length === 2 &&
+  scenes[4].captions[0].text === "{month}. {n:n_high|bridge|bridges} flagged." &&
+  scenes[4].captions[1].text === "This one is moving at both ends.");
+check("7d scene-6 captions unchanged",
+  scenes[5].captions.length === 2 &&
+  scenes[5].captions[0].text === "{month}. The only red bridge in the city." &&
+  scenes[5].captions[1].text ===
+  "Faster than anything in its own record. One end rising, the next span sinking.");
+
+// --- phase 7d fix: step camera centres the bridge ---
+const STEP_CAROLA = [13.7478, 51.0534]; // stand-in Carolabrücke centroid (not the city centre)
+const stepPatch = stepCameraPatch(scenes[5].camera, STEP_CAROLA);
+check("7d-fix step patch carries the Carolabrücke centroid",
+  Array.isArray(stepPatch.center) &&
+  stepPatch.center[0] === STEP_CAROLA[0] && stepPatch.center[1] === STEP_CAROLA[1] &&
+  stepPatch.zoom === 15.7 && stepPatch.pitch === 65 && stepPatch.bearing === 0);
+check("planted: centre-less step patch is caught",
+  stepPatch.center !== undefined);
 
 if (failures) {
   console.log(`test_story: FAIL (${failures} failure(s))`);

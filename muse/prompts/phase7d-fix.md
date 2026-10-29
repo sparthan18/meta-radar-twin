@@ -1,0 +1,11 @@
+Phase 7d fix: two camera defects measured when scene 6 was played in a real browser at 1280×800. Change only web/index.html (one map option), web/story.js and tests/test_story.js. Do not touch web/data/, scripts/ or out/.
+
+1. Pitch 65 never happens. Measured: scene 6 reads zoom 15.7 and bearing 20 as intended, but pitch 60. MapLibre clamps pitch to the map's `maxPitch`, whose default is 60. Set `maxPitch: 75` in the `new maplibregl.Map({...})` options (not higher; the dark raster looks wrong past that) and keep the scene-6 target at 65. Report the line.
+
+2. Seeking straight to scene 6 leaves the bridge at the edge of the frame. Measured: after a chapter click to scene 6 from scene 1, the map centre is still the city centre (13.745, 51.057) and Carolabrücke sits at the right edge at zoom 15.7; only scene 5's fly-in centres it. The "step" camera mode must set the centre to the scene's bridge centroid as well as zoom, pitch and bearing (a `jumpTo` with `center`), so a seek lands on the same framing as natural play. Playing from scene 5 into 6 must still look like one continuous shot (no visible jump: the centroid is already the centre). Add a test in tests/test_story.js that the step camera patch for scene 6 carries the Carolabrücke centroid, with a planted failure.
+
+3. The landing overlay survives into Explore. Measured: pressing Escape on the landing, before Play, switches to Explore (side panel, slider, headline all present) but `#storyLanding` with its title and Play button stays visible over the map. Entering Explore by any route (Escape, "Explore this month", a bridge click) must hide the landing; "Watch the story" brings it back only when the story has not started. Add a test for the mode transition's element states if the mode logic has a pure part; otherwise state how you verified it by reading the code.
+
+Prove it from the code and the tests; you have no browser. The reviewer will seek to chapter 6 and read pitch, zoom and the map centre, and press Escape on the landing and check the overlay is gone.
+
+Standing rules: do not use jg/jevgrep or any tool that sends code to an external service; no spend, no network, no installs, no commits, no background jobs, no `&`. Do not change wording, data or thresholds. Call the build steps "phases". Finish with the diff, the test results and a sentence per item on how you verified it.
