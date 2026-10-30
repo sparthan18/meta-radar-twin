@@ -1,5 +1,7 @@
 "use strict";
-// RadarTwin explainer (phase 7c, scene 2): how radar sees a 1 mm kerb move.
+// RadarTwin explainer (phases 7c-8b, scene 2): how radar sees a 1 mm kerb
+// move. The 8b pass redraws the SVG as a FUI diagram; the pure timing
+// below is untouched, so the chart-to-dot morph keeps its beats.
 //
 // Pure part (no DOM) runs in node and is tested by tests/test_explainer.js:
 // explainerFrame(t) returns the element positions for a time t in seconds
@@ -147,6 +149,40 @@ function explainerReducedT(t) {
   return 15.0;
 }
 
+// Phase 8b fix: scene-2 geometry. The lowest diagram element is the
+// "bridge" label at deck y + 62 (SVG units); the cover reserves
+// 8vh + 166 px below the SVG (104 px two-line caption + 40 px gap +
+// 22 px slack) so the diagram sits above the caption band at both
+// review sizes. Pure; mirrors web/story.css #sceneCover / #caption.
+const EXPLAINER_LOWEST_Y = 412;
+const EXPLAINER_COVER_BELOW_VH = 0.08;
+const EXPLAINER_COVER_BELOW_PX = 166;
+const EXPLAINER_CAPTION_BELOW_VH = 0.08;
+const EXPLAINER_CAPTION_BELOW_PX = 16;
+const EXPLAINER_CAPTION_PAD = 30;
+const EXPLAINER_CAPTION_LINE = 36.8;
+
+function explainerDiagramBottom(viewportW, viewportH) {
+  const vw = Number(viewportW), vh = Number(viewportH);
+  if (!(vw > 0) || !(vh > 0)) return 0;
+  const pad = EXPLAINER_COVER_BELOW_VH * vh + EXPLAINER_COVER_BELOW_PX;
+  const contentH = Math.max(1, vh - pad);
+  const scale = Math.min(vw / 800, contentH / 450);
+  const renderedH = 450 * scale;
+  const offY = (contentH - renderedH) / 2;
+  return offY + EXPLAINER_LOWEST_Y * scale;
+}
+
+function explainerCaptionTop(viewportH, lines) {
+  const vh = Number(viewportH);
+  if (!(vh > 0)) return 0;
+  const n = (lines === undefined || lines === null) ? 2 : Number(lines);
+  const bottom = vh - (EXPLAINER_CAPTION_BELOW_VH * vh +
+    EXPLAINER_CAPTION_BELOW_PX);
+  const h = EXPLAINER_CAPTION_PAD + Math.max(0, n) * EXPLAINER_CAPTION_LINE;
+  return bottom - h;
+}
+
 // ---------- Browser part ----------
 // ExplainerShow(container) builds the SVG; ExplainerSync(container, t)
 // moves every element to explainerFrame(t) (snapped per-beat under reduced
@@ -184,6 +220,15 @@ function explainerChartXY(i, v) {
   return [x, y];
 }
 
+// Corner brackets for a box (x0, y0, x1, y1) with corner size s: four
+// open corners as one path, the FUI bracket frame in miniature.
+function explainerCorners(x0, y0, x1, y1, s) {
+  return `M ${x0} ${y0 + s} L ${x0} ${y0} L ${x0 + s} ${y0} ` +
+    `M ${x1 - s} ${y0} L ${x1} ${y0} L ${x1} ${y0 + s} ` +
+    `M ${x1} ${y1 - s} L ${x1} ${y1} L ${x1 - s} ${y1} ` +
+    `M ${x0 + s} ${y1} L ${x0} ${y1} L ${x0} ${y1 - s}`;
+}
+
 // Build the scene-2 SVG inside container (clears it first). Returns the
 // svg element, or null when there is no DOM.
 function ExplainerShow(container) {
@@ -206,13 +251,18 @@ function ExplainerShow(container) {
     class: "explainer-panel" }, sat);
   explainerMk("rect", { x: "26", y: "-4", width: "26", height: "12",
     class: "explainer-panel" }, sat);
-  const satLab = explainerMk("text", { x: "0", y: "30",
+  explainerMk("path", { d: explainerCorners(-58, -24, 58, 18, 8),
+    class: "explainer-bracket", fill: "none" }, sat);
+  const satLab = explainerMk("text", { x: "0", y: "32",
     class: "explainer-label", "text-anchor": "middle" }, sat);
   satLab.textContent = "satellite";
   // Pulse + echo arcs (paths updated per frame).
   explainerMk("path", { id: "expPulse", class: "explainer-pulse",
     d: "M 0 0", fill: "none" }, svg);
   explainerMk("path", { id: "expEcho", class: "explainer-echo",
+    d: "M 0 0", fill: "none" }, svg);
+  // The dashed echo path from the satellite to the kerb (also per frame).
+  explainerMk("path", { id: "expEchoPath", class: "explainer-echo-path",
     d: "M 0 0", fill: "none" }, svg);
   // Bridge deck, pillars, kerb.
   explainerMk("rect", { x: "150", y: String(EXPLAINER_DECK_Y),
@@ -224,9 +274,14 @@ function ExplainerShow(container) {
   const deckLab = explainerMk("text", { x: "150", y: String(EXPLAINER_DECK_Y + 62),
     class: "explainer-label" }, svg);
   deckLab.textContent = "bridge";
+  const kerbG = explainerMk("g", { id: "expKerbG" }, svg);
   explainerMk("rect", { id: "expKerb", x: String(EXPLAINER_KERB_X - 5),
     y: String(EXPLAINER_DECK_Y - 12), width: "10", height: "12",
-    class: "explainer-kerb" }, svg);
+    class: "explainer-kerb" }, kerbG);
+  explainerMk("path", {
+    d: explainerCorners(EXPLAINER_KERB_X - 9, EXPLAINER_DECK_Y - 16,
+      EXPLAINER_KERB_X + 9, EXPLAINER_DECK_Y + 4, 5),
+    class: "explainer-bracket", fill: "none" }, kerbG);
   const kerbLab = explainerMk("text", { id: "expKerbLab",
     x: String(EXPLAINER_KERB_X + 14), y: String(EXPLAINER_DECK_Y - 2),
     class: "explainer-label" }, svg);
@@ -273,7 +328,8 @@ function ExplainerSync(container, t) {
   const f = explainerFrame(tt);
   const q = (id) => container.querySelector(`#${id}`);
   const sat = q("expSat"), pulse = q("expPulse"), echo = q("expEcho");
-  const kerb = q("expKerb"), kerbLab = q("expKerbLab");
+  const echoPath = q("expEchoPath");
+  const kerb = q("expKerb"), kerbG = q("expKerbG"), kerbLab = q("expKerbLab");
   const counter = q("expCounter");
   const chart = q("expChart"), line = q("expLine");
   const dot = q("expDot"), dotLab = q("expDotLab");
@@ -298,7 +354,19 @@ function ExplainerSync(container, t) {
       echo.setAttribute("opacity", "0");
     }
   }
-  if (kerb) kerb.setAttribute("y", String(EXPLAINER_DECK_Y - 12 + f.kerbDy));
+  if (echoPath) {
+    if (f.sat.visible) {
+      const ky = EXPLAINER_DECK_Y - 12 + f.kerbDy;
+      echoPath.setAttribute("d",
+        `M ${f.sat.x.toFixed(1)} ${EXPLAINER_SAT_Y + 12} L ${EXPLAINER_KERB_X} ${ky.toFixed(1)}`);
+      echoPath.setAttribute("opacity", "0.5");
+    } else {
+      echoPath.setAttribute("opacity", "0");
+    }
+  }
+  // The kerb group (outline + brackets) lifts as one; the label tracks it.
+  if (kerbG) kerbG.setAttribute("transform", `translate(0 ${f.kerbDy.toFixed(1)})`);
+  else if (kerb) kerb.setAttribute("y", String(EXPLAINER_DECK_Y - 12 + f.kerbDy));
   if (kerbLab) {
     kerbLab.setAttribute("y", String(EXPLAINER_DECK_Y - 2 + f.kerbDy));
     kerbLab.textContent = (f.beat >= 2) ? "kerb +1 mm" : "kerb";
@@ -339,8 +407,10 @@ if (typeof module !== "undefined" && module.exports) {
     explainerEcho, explainerKerbDy, explainerCounter, explainerCounterText,
     explainerChartProgress, explainerDotMorph, explainerChartPoints,
     explainerFrame, explainerReducedT, explainerClampT,
+    explainerDiagramBottom, explainerCaptionTop,
     EXPLAINER_DURATION, EXPLAINER_BEAT1_END, EXPLAINER_BEAT2_END,
     EXPLAINER_SAT_Y, EXPLAINER_SAT_X0, EXPLAINER_SAT_X1,
-    EXPLAINER_KERB_LIFT_PX, EXPLAINER_PULSE_PERIOD
+    EXPLAINER_KERB_LIFT_PX, EXPLAINER_PULSE_PERIOD,
+    EXPLAINER_LOWEST_Y
   };
 }

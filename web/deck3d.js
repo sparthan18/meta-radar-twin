@@ -23,6 +23,18 @@ const DECK_MAX_HEIGHT_M = 20;
 const DECK_PILLAR_FOOT_M = -8;
 const DECK_RING_RADII_M = [250, 300];
 const DECK_TWEEN_MS = 600;
+// Phase 8c-1 seated mode (story close-up; spec section 4): one continuous
+// slab on piers at true height. Deck top 12 m above the water, 2 m thick;
+// piers 3 m x 3 m from 0 m to the deck's underside (10 m); per-span pitch
+// scaled so the worst span of the shown month tilts 2.5 degrees, never
+// more. Quiet (none/unknown) spans carry the prism tone; watch/elevated/
+// high carry the ladder tokens; high adds a faint red emissive bloom.
+const DECK_SEATED_TOP_M = 12;
+const DECK_SEATED_THICK_M = 2;
+const DECK_SEATED_TILT_DEG = 2.5;
+const DECK_SEATED_PIER_M = 3;
+const DECK_SEATED_QUIET = "#4d6a9e";
+const DECK_SEATED_EMISSIVE = 0.15;
 
 // Span scale (±4 mm/yr, same stops as the map's span dots and
 // web/annotate.js spanColor). Duplicated here so the custom layer has no
@@ -71,22 +83,50 @@ function deckExaggeration(spans, maxHeightM) {
   return { maxAbs, mPerUnit: maxAbs > 0 ? mh / maxAbs : 0, maxHeightM: mh };
 }
 
-// deckMeshSpec(spans, cutoffIdx, lenM, axisBearing): box layout for one
-// bridge at one month. One box per span, sorted by along_m, centred on
-// the deck (local X = along minus lenM/2, Y up, Z across). Segment
+// Seated-mode span style (phase 8c-1): colour by the bound month's bridge
+// class, not by per-span value. Null spans are dim at 60 % opacity;
+// quiet (none/unknown) is the prism tone; watch/elevated/high carry the
+// ladder tokens; high adds the faint red emissive bloom.
+function deckSeatedStyle(risk, isNull) {
+  if (isNull) {
+    return { color: "#8ea3c7", emissive: "#000000",
+      emissiveIntensity: 0, opacity: 0.6 };
+  }
+  let color = DECK_SEATED_QUIET;
+  if (risk === "watch") color = "#f2b84b";
+  else if (risk === "elevated") color = "#ff7a2f";
+  else if (risk === "high") color = "#ff3b3b";
+  const hot = risk === "high";
+  return { color, emissive: hot ? "#ff3b3b" : "#000000",
+    emissiveIntensity: hot ? DECK_SEATED_EMISSIVE : 0, opacity: 1 };
+}
+
+// deckMeshSpec(spans, cutoffIdx, lenM, axisBearing, opts): box layout for
+// one bridge at one month. One box per span, sorted by along_m, centred
+// on the deck (local X = along minus lenM/2, Y up, Z across). Segment
 // boundaries fall midway between adjacent along_m positions (deck ends at
 // 0 and lenM), so each box length covers its span's share of the deck.
-// Box centre Y is that month's anomaly times the exaggeration (nulls sit
-// at 0, grey and flat); the box top at zero anomaly is half a thickness
-// above the map (centre at ground level) so the deck reads above the
-// faded fill without z-fighting. Each box tilts about Z by the slope to
-// its neighbours (atan of dh/dx) so adjacent tops meet. Pillars stand
-// under the interior joints from the joint underside down to
-// DECK_PILLAR_FOOT_M. Colours follow the span scale; opts.risk === "high"
-// adds a red glow emissive. Returns {boxes, pillars, maxAbs, mPerUnit,
-// axisBearing, lenM, cutoffIdx}.
+// Mode "bars" (the default; Explore keeps this): box centre Y is that
+// month's anomaly times the exaggeration (nulls sit at 0, grey and flat);
+// the box top at zero anomaly is half a thickness above the map (centre
+// at ground level) so the deck reads above the faded fill without
+// z-fighting. Each box tilts about Z by the slope to its neighbours (atan
+// of dh/dx) so adjacent tops meet. Pillars stand under the interior
+// joints from the joint underside down to DECK_PILLAR_FOOT_M. Colours
+// follow the span scale; opts.risk === "high" adds a red glow emissive.
+// Returns {boxes, pillars, maxAbs, mPerUnit, axisBearing, lenM, cutoffIdx}.
+// Mode "seated" (phase 8c-1 story close-up; spec section 4): one
+// continuous slab on piers at true height. Every box centre sits at
+// DECK_SEATED_TOP_M minus half the 2 m thickness (11 m); box ends meet at
+// the pier lines (the same midway boundaries); each span pitches about
+// its centre by the month's anomaly scaled so the worst span of the shown
+// month tilts DECK_SEATED_TILT_DEG, never more (nulls flat); piers are
+// 3 m x 3 m columns from 0 m to the deck's underside (10 m) at each span
+// joint. Colours follow deckSeatedStyle. Returns the same shape plus
+// {mode, monthMaxAbs, tiltCapDeg}; mPerUnit is 0 (no exaggeration).
 function deckMeshSpec(spans, cutoffIdx, lenM, axisBearing, opts) {
   const o = opts || {};
+  const mode = (o.mode === "seated") ? "seated" : "bars";
   const widthM = (o.widthM === undefined || o.widthM === null)
     ? DECK_WIDTH_M : Number(o.widthM);
   const thickM = (o.thickM === undefined || o.thickM === null)
@@ -102,6 +142,9 @@ function deckMeshSpec(spans, cutoffIdx, lenM, axisBearing, opts) {
     Number(a.along_m) - Number(b.along_m));
   const ex = deckExaggeration(arr, maxHeightM);
   const bearing = Number(axisBearing);
+  if (mode === "seated") {
+    return deckSeatedSpec(arr, cutoffIdx, len, bearing, widthM, risk, ex);
+  }
   const boxes = arr.map((s, i) => {
     const along = Number(s.along_m);
     const a = Number.isFinite(along) ? along : 0;
@@ -165,6 +208,74 @@ function deckMeshSpec(spans, cutoffIdx, lenM, axisBearing, opts) {
   };
 }
 
+// deckSeatedSpec: the "seated" half of deckMeshSpec (sorted spans in, spec
+// out). Segmentation mirrors the bars rule (midway boundaries, deck ends
+// at 0 and lenM) so box ends meet at the pier lines; pier x positions are
+// the exact shared boundaries (box centre plus half the box length), not
+// midpoints of adjacent centres.
+function deckSeatedSpec(arr, cutoffIdx, len, bearing, widthM, risk, ex) {
+  const thick = DECK_SEATED_THICK_M;
+  const y0 = DECK_SEATED_TOP_M - thick / 2;
+  const under = DECK_SEATED_TOP_M - thick;
+  const capRad = DECK_SEATED_TILT_DEG * Math.PI / 180;
+  let monthMax = 0;
+  for (const s of (arr || [])) {
+    const raw = (s && Array.isArray(s.anomaly)) ? s.anomaly[cutoffIdx] : null;
+    if (raw === null || raw === undefined || Number.isNaN(Number(raw))) continue;
+    const a = Math.abs(Number(raw));
+    if (a > monthMax) monthMax = a;
+  }
+  const boxes = (arr || []).map((s, i) => {
+    const along = Number(s.along_m);
+    const a = Number.isFinite(along) ? along : 0;
+    let prevB, nextB;
+    if (arr.length <= 1 || !(len > 0)) {
+      prevB = len > 0 ? 0 : a - 10;
+      nextB = len > 0 ? len : a + 10;
+    } else {
+      const pa = (i > 0) ? Number(arr[i - 1].along_m) : null;
+      const na = (i + 1 < arr.length) ? Number(arr[i + 1].along_m) : null;
+      prevB = (i === 0) ? 0 : (a + pa) / 2;
+      nextB = (i === arr.length - 1) ? len : (a + na) / 2;
+    }
+    const blen = Math.max(1, nextB - prevB);
+    const centreAlong = (prevB + nextB) / 2;
+    const x = (len > 0) ? centreAlong - len / 2 : 0;
+    const raw = (s && Array.isArray(s.anomaly)) ? s.anomaly[cutoffIdx] : null;
+    const isNull = (raw === null || raw === undefined || Number.isNaN(Number(raw)));
+    const value = isNull ? null : Number(raw);
+    let rotZ = 0;
+    if (!isNull && monthMax > 0) {
+      rotZ = (value / monthMax) * capRad;
+      if (rotZ > capRad) rotZ = capRad;
+      if (rotZ < -capRad) rotZ = -capRad;
+    }
+    const st = deckSeatedStyle(risk, isNull);
+    return {
+      span: s.span, alongM: a, x, y: y0, z: 0,
+      len: blen, thick, width: widthM,
+      rotZ, value, isNull,
+      color: st.color, emissive: st.emissive,
+      emissiveIntensity: st.emissiveIntensity, opacity: st.opacity
+    };
+  });
+  const pillars = [];
+  for (let i = 0; i + 1 < boxes.length; i++) {
+    const jx = boxes[i].x + boxes[i].len / 2;
+    pillars.push({
+      x: jx, y: under / 2, z: 0,
+      w: DECK_SEATED_PIER_M, h: under, d: DECK_SEATED_PIER_M
+    });
+  }
+  return {
+    boxes, pillars, mode: "seated",
+    maxAbs: ex ? ex.maxAbs : 0, mPerUnit: 0,
+    monthMaxAbs: monthMax, tiltCapDeg: DECK_SEATED_TILT_DEG,
+    axisBearing: Number.isFinite(bearing) ? bearing : 0,
+    lenM: len, cutoffIdx
+  };
+}
+
 // Web-Mercator normalised x/y for lon/lat (the transform MapLibre's
 // MercatorCoordinate applies to the bridge origin before scaling metres).
 function deckMercatorXY(lon, lat) {
@@ -186,7 +297,7 @@ function deckMeterScale(lat) {
 // Long-axis bearing (degrees clockwise from north) of a polygon ring
 // ([[lon,lat]...]): the bearing between the two farthest points
 // (equirectangular distance, great-circle bearing). Deck boxes rotate by
-// this bearing minus 90° about the model's up axis (see the render() note
+// 90° minus this bearing about the model's up axis (see the render() note
 // below), so the deck's local X runs along the polygon's long axis.
 function deckAxisBearing(ring) {
   const pts = (ring || []).filter((p) =>
@@ -254,6 +365,44 @@ function deckOrientBearing(axisBearing, spans) {
   const d = (((a - sb) % 360) + 540) % 360 - 180;
   if (Math.abs(d) > 90) a = (a + 180) % 360;
   return a;
+}
+
+// Model rotation for an axis bearing (degrees clockwise from north).
+// render()'s model matrix is translate · scale(s,−s,s) · rotX(π/2) ·
+// rotY(angle): local X must render at the axis bearing. The −Y scale
+// flips handedness, so rotY(axis−90°) maps X to 180°−axis (mirrored
+// about north); rotY(90°−axis) maps X to the axis bearing. Returns
+// radians for THREE's makeRotationAxis(Y, ...). render() calls this,
+// so the unit-X test below guards the shipped matrix.
+function deckRotYRad(axisDeg) {
+  return (90 - Number(axisDeg)) * Math.PI / 180;
+}
+
+// Model-space direction (x,y,z) to map-space (east,north,up) through the
+// same rotation as render()'s model matrix (rotY, then rotX(π/2), then
+// the Mercator Y-south flip; translation and metre scale omitted —
+// direction only). East is +x, north is −y (Mercator Y runs south).
+function deckModelDirToMap(axisDeg, x, y, z) {
+  const th = deckRotYRad(axisDeg);
+  const ct = Math.cos(th), st = Math.sin(th);
+  const rx = Number(x) * ct + Number(z) * st;
+  const ry = Number(y);
+  const rz = -Number(x) * st + Number(z) * ct;
+  const qx = rx, qy = -rz, qz = ry;
+  return { east: qx, north: qy, up: qz };
+}
+
+// Seated-mode directional light position in model space for an axis
+// bearing: low from the south-east in map space (bearing 135°, elevation
+// atan(42/150) ≈ 15.6°), matching the basemap's hard low light. The
+// light lives in model space, so it inverse-rotates with the axis: fixed
+// model coordinates would drift off south-east for any other bridge.
+// Returns [x,y,z] (metres about the bridge origin, Y up).
+function deckSeatedLight(axisDeg) {
+  const phi = (Number(axisDeg) - 90) * Math.PI / 180;
+  const c = Math.cos(phi), s = Math.sin(phi);
+  const H = 150, U = 42, k = Math.SQRT1_2;
+  return [H * (c + s) * k, U, H * (c - s) * k];
 }
 
 // Worry-scale wording for a model risk (Explore legend words, technical
@@ -342,11 +491,20 @@ function deckHasGsap() {
   return (typeof gsap !== "undefined") && gsap !== null;
 }
 
-function deckSetFillDim(map, dim) {
+function deckSetFillDim(map, dim, seated) {
   try {
-    if (!map || !map.getLayer || !map.getLayer("bridges-fill")) return;
-    if (!map.setPaintProperty) return;
-    map.setPaintProperty("bridges-fill", "fill-opacity", dim ? 0.15 : 0.38);
+    if (!map || !map.getLayer || !map.setPaintProperty) return;
+    if (map.getLayer("bridges-fill")) {
+      map.setPaintProperty("bridges-fill", "fill-opacity",
+        !dim ? 0.38 : (seated ? 0 : 0.15));
+    }
+    // Seated close-up (story scenes 5-6): the footprint drops to a 1 px
+    // hairline with no fill, so the slab is the bridge. Bars mode leaves
+    // the outline alone; restoring always returns it to 2.5.
+    if (map.getLayer("bridges-line") && (seated || !dim)) {
+      map.setPaintProperty("bridges-line", "line-width",
+        (!dim || !seated) ? 2.5 : 1);
+    }
   } catch (e) { /* fill is decoration, never fatal */ }
 }
 
@@ -371,16 +529,29 @@ function deckDisposeThree() {
 
 // Build the three.js scene from a deckMeshSpec: one BoxGeometry per span
 // (X along the deck, Y up, Z across), pillars under the joints, one
-// directional light plus ambient. Colours are the spec's span colours;
-// a high bridge gets a red glow emissive.
-function deckBuildScene(spec) {
+// directional light plus ambient. Bars mode colours are the spec's span
+// colours and a high bridge gets a red glow emissive; seated mode colours
+// follow the bound month's class (deckSeatedStyle) with null spans at
+// 60 % opacity, lit to match the basemap (low directional from the
+// south-east plus 0.45 ambient, axis-aware via deckSeatedLight so the
+// corrected rotation keeps it south-east) so the slab shades like the
+// prisms around it: MeshLambert, so the top face reads lighter than the
+// sides under the directional light. lightAxisDeg overrides the spec's
+// axis for the light (Deck3DShow passes the oriented axis).
+function deckBuildScene(spec, lightAxisDeg) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera();
+  const seated = !!(spec && spec.mode === "seated");
   try {
-    const amb = new THREE.AmbientLight(0xffffff, 0.65);
+    const amb = new THREE.AmbientLight(0xffffff, seated ? 0.45 : 0.65);
     scene.add(amb);
     const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-    dir.position.set(120, 220, 80);
+    if (seated) {
+      const ax = (lightAxisDeg !== undefined && lightAxisDeg !== null)
+        ? lightAxisDeg : (spec && spec.axisBearing) || 0;
+      const lp = deckSeatedLight(ax);
+      dir.position.set(lp[0], lp[1], lp[2]);
+    } else dir.position.set(120, 220, 80);
     scene.add(dir);
   } catch (e) { /* lights are nice, never fatal */ }
   const meshes = [];
@@ -393,6 +564,11 @@ function deckBuildScene(spec) {
         emissive: new THREE.Color(b.emissive || "#000000"),
         emissiveIntensity: b.emissiveIntensity || 0
       });
+      if (b.opacity !== undefined && b.opacity !== null &&
+          Number(b.opacity) < 1) {
+        mat.transparent = true;
+        mat.opacity = Number(b.opacity);
+      }
       mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(b.x, b.y, b.z || 0);
       mesh.rotation.z = b.rotZ || 0;
@@ -437,7 +613,7 @@ function deckOriginFor(lon, lat) {
 // matrix and multiplies the model transform: translate to the Mercator
 // origin, scale metres to Mercator units (Y negated: Mercator Y runs
 // south), rotateX(π/2) to map model Y-up onto Mercator Z-up, and rotateY
-// by (axisBearing − 90°) so local X runs along the deck's compass
+// by (90° − axisBearing) so local X runs along the deck's compass
 // bearing. Because the origin and matrix are re-read every frame, the
 // deck stays attached through pan, zoom, pitch and bearing.
 function deckMakeLayer() {
@@ -461,7 +637,7 @@ function deckMakeLayer() {
           new THREE.Vector3(1, 0, 0), Math.PI / 2);
         const rotY = new THREE.Matrix4().makeRotationAxis(
           new THREE.Vector3(0, 1, 0),
-          (deckAxisDeg - 90) * Math.PI / 180);
+          deckRotYRad(deckAxisDeg));
         const m = new THREE.Matrix4().fromArray(matrix);
         const l = new THREE.Matrix4()
           .makeTranslation(deckOrigin.x, deckOrigin.y, deckOrigin.z || 0)
@@ -478,10 +654,12 @@ function deckMakeLayer() {
 }
 
 // Show the deck for one bridge at one month. opts: {bid, spans,
-// cutoffIdx, lenM, centroid:[lon,lat], risk, axisBearing, tweenMs}.
-// Same-bridge re-shows retarget the heights (Explore slider, story scene
-// 6); bridge changes rebuild the layer. Returns true when the layer is
-// on, false when unsupported (no THREE, phone layout) so callers fall
+// cutoffIdx, lenM, centroid:[lon,lat], risk, axisBearing, tweenMs, mode}.
+// mode "seated" (phase 8c-1 story close-up) seats the slab on piers;
+// any other mode (including omitted: Explore) keeps the exaggerated
+// bars. Same-bridge re-shows retarget the heights (Explore slider, story
+// scene 6); bridge changes rebuild the layer. Returns true when the layer
+// is on, false when unsupported (no THREE, phone layout) so callers fall
 // back to the side view.
 function Deck3DShow(map, opts) {
   const o = opts || {};
@@ -493,19 +671,20 @@ function Deck3DShow(map, opts) {
     return true;
   }
   Deck3DHide(map);
+  const orientedAxis = deckOrientBearing(Number(o.axisBearing) || 0,
+    o.spans || []);
   let spec = null;
   try {
     spec = deckMeshSpec(o.spans || [], midx, o.lenM, o.axisBearing,
-      { risk: o.risk });
+      { risk: o.risk, mode: o.mode });
   } catch (e) { return false; }
   if (!spec || !spec.boxes.length) return false;
   try {
-    deckThree = deckBuildScene(spec);
+    deckThree = deckBuildScene(spec, orientedAxis);
   } catch (e) { deckThree = null; return false; }
   deckSpec = spec;
   deckBid = String(o.bid);
-  deckAxisDeg = deckOrientBearing(Number(o.axisBearing) || 0,
-    o.spans || []);
+  deckAxisDeg = orientedAxis;
   deckOrigin = deckOriginFor(o.centroid[0], o.centroid[1]);
   deckMap = map;
   try {
@@ -518,14 +697,16 @@ function Deck3DShow(map, opts) {
     deckSpec = null;
     return false;
   }
-  deckSetFillDim(map, true);
+  deckSetFillDim(map, true, (o.mode === "seated"));
   try { if (map.triggerRepaint) map.triggerRepaint(); } catch (e) {}
   return true;
 }
 
-// Retarget the showing deck to a new month. The span heights (and tilts)
+// Retarget the showing deck to a new month. The span heights (and tilts;
+// seated mode retargets the pitch, which is the month's signal there)
 // tween over tweenMs (story scene 6: 600); under reduced motion, without
-// GSAP, or at tweenMs 0 they jump to the final heights.
+// GSAP, or at tweenMs 0 they jump to the final heights. The showing mode
+// is preserved from Deck3DShow.
 function Deck3DUpdate(map, cutoffIdx, opts) {
   if (!deckLayerOn || !deckThree || !deckSpec) return false;
   const o = opts || {};
@@ -533,7 +714,8 @@ function Deck3DUpdate(map, cutoffIdx, opts) {
   let next = null;
   try {
     next = deckMeshSpec(deckSpec && deckThree ? Deck3DSpans() : [],
-      midx, deckSpec.lenM, deckAxisDeg, { risk: Deck3DRisk() });
+      midx, deckSpec.lenM, deckAxisDeg,
+      { risk: Deck3DRisk(), mode: Deck3DMode() });
   } catch (e) { return false; }
   if (!next || next.boxes.length !== deckThree.meshes.length) return false;
   deckSpec = next;
@@ -553,9 +735,10 @@ function Deck3DUpdate(map, cutoffIdx, opts) {
     entry.box.y = y;
     entry.box.rotZ = rotZ;
   };
-  // Colours follow the month's anomaly (span scale; red glow stays while
-  // the bridge is high). Materials update instantly even when heights
-  // tween: the data month has changed.
+  // Colours follow the month (bars: the span scale, red glow stays while
+  // the bridge is high; seated: the month's class, nulls at 60 %).
+  // Materials update instantly even when heights tween: the data month
+  // has changed.
   for (let i = 0; i < next.boxes.length; i++) {
     const entry = deckThree.meshes[i];
     const b = next.boxes[i];
@@ -567,9 +750,17 @@ function Deck3DUpdate(map, cutoffIdx, opts) {
         entry.mesh.material.emissiveIntensity = b.emissiveIntensity || 0;
       }
     } catch (e) {}
+    try {
+      const op = (b.opacity === undefined || b.opacity === null)
+        ? 1 : Number(b.opacity);
+      entry.mesh.material.transparent = op < 1;
+      entry.mesh.material.opacity = op;
+      entry.mesh.material.needsUpdate = true;
+    } catch (e) {}
     entry.box.color = b.color;
     entry.box.value = b.value;
     entry.box.isNull = b.isNull;
+    entry.box.opacity = b.opacity;
   }
   // Pillars follow their joints instantly (they are supports, not data).
   for (let p = 0; p < deckThree.pillarMeshes.length; p++) {
@@ -616,6 +807,7 @@ function Deck3DUpdate(map, cutoffIdx, opts) {
 // Stashed inputs for retargeting (set by Deck3DShow, read by Deck3DUpdate).
 let deckStashSpans = [];
 let deckStashRisk = null;
+let deckStashMode = "bars";
 
 function Deck3DSpans() {
   return deckStashSpans;
@@ -625,11 +817,16 @@ function Deck3DRisk() {
   return deckStashRisk;
 }
 
+function Deck3DMode() {
+  return deckStashMode;
+}
+
 const deckShowInner = Deck3DShow;
 Deck3DShow = function (map, opts) {
   const o = opts || {};
   if (o.spans) deckStashSpans = o.spans;
   deckStashRisk = o.risk || null;
+  deckStashMode = (o.mode === "seated") ? "seated" : "bars";
   return deckShowInner(map, o);
 };
 
@@ -652,10 +849,14 @@ function Deck3DHide(map) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     deckSpanColor, deckMaxAbs, deckExaggeration, deckMeshSpec,
+    deckSeatedStyle,
     deckMercatorXY, deckMeterScale, deckAxisBearing,
     deckLonLatBearing, deckOrientBearing,
+    deckRotYRad, deckModelDirToMap, deckSeatedLight,
     hudWorryFor, hudLinesFor, deckRingRadiusPx,
     DECK_WIDTH_M, DECK_THICKNESS_M, DECK_MAX_HEIGHT_M,
-    DECK_PILLAR_FOOT_M, DECK_RING_RADII_M, DECK_TWEEN_MS
+    DECK_PILLAR_FOOT_M, DECK_RING_RADII_M, DECK_TWEEN_MS,
+    DECK_SEATED_TOP_M, DECK_SEATED_THICK_M, DECK_SEATED_TILT_DEG,
+    DECK_SEATED_PIER_M, DECK_SEATED_QUIET, DECK_SEATED_EMISSIVE
   };
 }

@@ -1,0 +1,9 @@
+Phase 8b fix 5: two polish items judged by eye on frames of fix 4 (which passed: the city reads as 3D). Read docs/design-spec.md §4 (buildings paragraph, the crane move) and §8 (landing) first; both rules are already written there. Change only web/story.js, web/story.css, web/fui.css and tests/. No change to web/data/, scripts/ or out/. Do not change caption text, data, thresholds, the light, the walls, the fog or the landing camera.
+
+1. The crane start reads as a flat map for the first second: at 13.5/35 the walls are a pixel high. Per the spec the crane now starts at zoom 14.0, pitch 42, bearing −30 and descends to the landing's framing (15.2/66/−30) over the scene's nine seconds on the same ease-out curve; the dip, the jump behind the dip and the one-camera-path rule stay as in fix 4. Update the dual-path test's expected poses (0, 4.5 and 9 s) and the frames.md entry.
+
+2. The mono subtitle "DRESDEN · 2022 – 2024" is low-contrast over the lit rooftops. Per the spec: the subtitle is `--fg` at 85 % opacity (not the muted token), and every piece of lower-third type (wordmark, subtitle, tagline, scene captions) carries the dark halo `text-shadow: 0 0 24px rgba(7,11,20,.85), 0 1px 2px rgba(7,11,20,.9)`. No box, no scrim, no gradient band. Extend test_fui with the shadow and the subtitle colour (planted failure: a muted subtitle).
+
+Prove it from the code and tests; you have no browser. The reviewer will play from the landing untouched and capture frames at 1 and 9 s of scene 1.
+
+Standing rules: do not use jg/jevgrep or any tool that sends code to an external service; no spend; network only the page's own CDN, font and tile hosts; no installs, no commits, no background jobs, no `&`. Call the build steps "phases". Finish with the diff summary per item, the test results and a sentence per item on how you verified it.

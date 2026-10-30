@@ -1,7 +1,7 @@
 "use strict";
 // Phase 5d: fixture-driven test for web/memo.js. Run with:
 //   node tests/test_memo_render.js
-const { renderMemo } = require("../web/memo.js");
+const { renderMemo, memoWorryPhrase, memoRiskClass, parseActionRows, renderActionRows } = require("../web/memo.js");
 
 const FIXTURE = [
   "# Audit memo \u2014 2024-09-01",
@@ -95,6 +95,52 @@ try {
   caught = true;
 }
 check("planted bad render is caught", caught && renderMemo(FIXTURE) !== plantedBad);
+
+// Phase 8c-2: the Action list renders as hairline rows, not a grid.
+check("worry phrases by class",
+  memoWorryPhrase("high") === "send an inspector" &&
+  memoWorryPhrase("elevated") === "look closer" &&
+  memoWorryPhrase("watch") === "keep watching" &&
+  memoWorryPhrase("none") === "fine");
+check("risk classes",
+  memoRiskClass("high") === "high" &&
+  memoRiskClass("HIGH") === "high" &&
+  memoRiskClass("bogus") === "unknown");
+check("shipped September memo parses to one action row",
+  (() => {
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      const md = fs.readFileSync(path.join(__dirname, "..", "web",
+        "data", "memos", "2024-09-01.md"), "utf8");
+      const rows = parseActionRows(md);
+      return rows.length === 1 &&
+        rows[0].bridge === "Carolabrücke" &&
+        rows[0].risk === "high" &&
+        rows[0].why.indexOf("speeding motion") !== -1 &&
+        rows[0].action.indexOf("Inspect promptly") !== -1;
+    } catch (e) { return false; }
+  })());
+check("action rows carry name, worry, reason and to-do with no table grid",
+  (() => {
+    const html = renderActionRows([{ bridge: "Carolabrücke", risk: "high",
+      why: "speeding motion with spread", action: "Inspect promptly" }]);
+    return html.indexOf("memo-action") !== -1 &&
+      html.indexOf("memo-action-name") !== -1 &&
+      html.indexOf("Carolabrücke") !== -1 &&
+      html.indexOf("risk-high") !== -1 &&
+      html.indexOf("send an inspector") !== -1 &&
+      html.indexOf("memo-action-reason") !== -1 &&
+      html.indexOf("memo-action-do") !== -1 &&
+      html.indexOf("<table") === -1 && html.indexOf("<td") === -1;
+  })());
+check("planted: bordered action grid is caught",
+  renderActionRows([{ bridge: "B", risk: "high", why: "w", action: "a" }])
+    .indexOf("<table") === -1 &&
+  renderMemo(FIXTURE).indexOf("<table>") !== -1);
+check("action rows escape markup",
+  renderActionRows([{ bridge: "<b>", risk: "high", why: "<i>", action: "<u>" }])
+    .indexOf("<b>") === -1);
 
 if (failures) {
   console.log(`test_memo_render: FAIL (${failures} failure(s))`);

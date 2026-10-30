@@ -7,7 +7,8 @@ const {
   explainerBeat, explainerSatX, explainerSatVisible, explainerPulse,
   explainerEcho, explainerKerbDy, explainerCounter, explainerCounterText,
   explainerChartProgress, explainerDotMorph, explainerChartPoints,
-  explainerFrame, explainerReducedT
+  explainerFrame, explainerReducedT,
+  explainerDiagramBottom, explainerCaptionTop
 } = exp;
 
 let failures = 0;
@@ -101,6 +102,25 @@ check("reduced stills switch per beat",
   explainerReducedT(13) === 15.0);
 check("planted: animated reduced time is caught",
   explainerReducedT(1) !== 1);
+
+// --- phase 8b fix: diagram bottom clears the caption by 40 px ---
+check("8b-fix diagram bottom clears the caption at 1280x800",
+  explainerDiagramBottom(1280, 800) < explainerCaptionTop(800, 2) - 40);
+check("8b-fix diagram bottom clears the caption at 1920x1080",
+  explainerDiagramBottom(1920, 1080) < explainerCaptionTop(1080, 2) - 40);
+check("8b-fix diagram bottom clears one-line captions too",
+  explainerDiagramBottom(1280, 800) < explainerCaptionTop(800, 1) - 40 &&
+  explainerDiagramBottom(1920, 1080) < explainerCaptionTop(1080, 1) - 40);
+check("8b-fix lowest element is the bridge label at y 412",
+  exp.EXPLAINER_LOWEST_Y === 412);
+check("planted: unraised diagram is caught",
+  (() => {
+    // Without the cover reserve (full-height meet), the 412 label at
+    // 1280x800 renders at 699 px, below the two-line caption top 616.
+    const scale = Math.min(1280 / 800, 800 / 450);
+    const raw = 412 * scale + (800 - 450 * scale) / 2;
+    return raw > explainerCaptionTop(800, 2) - 40;
+  })());
 
 if (failures) {
   console.log(`test_explainer: FAIL (${failures} failure(s))`);

@@ -249,6 +249,133 @@ function deckGeometry(spans, cutoffIdx, lenM, opts) {
     pxPerUnit, blockH };
 }
 
+// Leader-line endpoints for a callout: from the map point to the nearest
+// edge of the label box. Pure; annotateDrawOne uses it so the drawn SVG
+// line and the test agree. Returns {x1,y1,x2,y2,len} with len >= 0.
+function calloutLineEnds(pt, pos, labelW, labelH) {
+  const ex = Math.max(pos.x, Math.min(pos.x + labelW, pt.x));
+  const ey = Math.max(pos.y, Math.min(pos.y + labelH, pt.y));
+  return { x1: pt.x, y1: pt.y, x2: ex, y2: ey,
+    len: Math.hypot(ex - pt.x, ey - pt.y) };
+}
+
+// Phase 8c-2 span callout gap (spec section 5): the label sits up and to
+// the right with a leader line at least 60 px long (the 12 px default gap
+// drew a ~17 px line that read as invisible). annotateDrawOne passes this
+// gap to placeLabel for span callouts; the test places the real September
+// fastest span's point with it and checks the drawn length.
+const ANNOTATE_SPAN_GAP = 60;
+const ANNOTATE_SPAN_LABEL_W = 168;
+const ANNOTATE_SPAN_LABEL_H = 48;
+
+// Evidence-chip projection (phase 8c-2, spec section 5): lon/lat into the
+// Sentinel-2 chip frame from data/s2_visual.json. corners is
+// [top-left, top-right, bottom-right, bottom-left] in EPSG:4326 lon/lat
+// pairs, W/H the chip pixels (93 x 91). The chip quad is a near
+// parallelogram, so the bilinear inverse is solved by Newton iteration
+// (10 steps from the centre); corners map exactly to (0,0), (W,0),
+// (W,H), (0,H). Returns {u, v, x, y} (fractions + pixels) or null on bad
+// input. Pure; the evidence card maps fractions to its display size.
+function s2ChipProject(lon, lat, corners, W, H) {
+  const x = Number(lon), y = Number(lat);
+  const w = Number(W), h = Number(H);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (!(w > 0) || !(h > 0)) return null;
+  if (!Array.isArray(corners) || corners.length < 4) return null;
+  const pts = [];
+  for (let i = 0; i < 4; i++) {
+    const c = corners[i];
+    const cx = Array.isArray(c) ? Number(c[0]) : NaN;
+    const cy = Array.isArray(c) ? Number(c[1]) : NaN;
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+    pts.push([cx, cy]);
+  }
+  const tl = pts[0], tr = pts[1], br = pts[2], bl = pts[3];
+  const fx = tr[0] - tl[0], fy = tr[1] - tl[1];
+  const gx = bl[0] - tl[0], gy = bl[1] - tl[1];
+  const hx = tl[0] - tr[0] + br[0] - bl[0];
+  const hy = tl[1] - tr[1] + br[1] - bl[1];
+  let u = 0.5, v = 0.5;
+  for (let k = 0; k < 10; k++) {
+    const px = tl[0] + u * fx + v * gx + u * v * hx;
+    const py = tl[1] + u * fy + v * gy + u * v * hy;
+    const rx = px - x, ry = py - y;
+    const j00 = fx + v * hx, j01 = gx + u * hx;
+    const j10 = fy + v * hy, j11 = gy + u * hy;
+    const det = j00 * j11 - j01 * j10;
+    if (!(Math.abs(det) > 1e-18)) break;
+    const du = (rx * j11 - ry * j01) / det;
+    const dv = (j00 * ry - j10 * rx) / det;
+    u -= du; v -= dv;
+    if (Math.abs(du) < 1e-9 && Math.abs(dv) < 1e-9) break;
+  }
+  if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+  return { u, v, x: u * w, y: v * h };
+}
+
+// Phase 8c-3 Europe labels (spec section 8): every lit city carries its
+// own label 8 px right of the dot (mono 11 px uppercase, --fg at 70%);
+// Dresden last with the red reticle and "DRESDEN". A label whose box
+// would touch the lower-third band (caption, scene index) or another
+// label is dropped, never overlapped. Pure; the browser path projects
+// the dots and draws the kept labels.
+const EUROPE_LABEL_GAP = 8;
+const EUROPE_LABEL_H = 14;
+const EUROPE_LABEL_CHAR_W = 7;
+const EUROPE_LABEL_PAD = 2;
+
+function europeLabelBox(name) {
+  const s = String(name === null || name === undefined ? "" : name);
+  return { w: Math.max(8, s.length * EUROPE_LABEL_CHAR_W + EUROPE_LABEL_PAD * 2),
+    h: EUROPE_LABEL_H };
+}
+
+// Top of the lower-third band (caption + scene index) for a map height:
+// the bottom letterbox (8%) plus the ~140 px caption/index zone above it.
+function europeBandTop(mapH) {
+  const h = Number(mapH);
+  if (!Number.isFinite(h) || h <= 0) return 0;
+  return h - (h * 0.08 + 140);
+}
+
+// europeKeptLabels(dots, mapW, mapH, bandTop): filter projected Europe
+// dots ({name, x, y} in screen px) to the labels to draw. Each label sits
+// 8 px right of its dot, vertically centred; the box is europeLabelBox.
+// Drops (in order, Dresden last as lit) any label whose box would touch
+// the band (ly + h >= bandTop counts as touching) or another kept label
+// (edge touch counts), or that would run off the map. Returns kept
+// [{name, x, y, w, h, lx, ly}] with (lx, ly) the label box top-left.
+function europeKeptLabels(dots, mapW, mapH, bandTop) {
+  const out = [];
+  const W = Number(mapW), H = Number(mapH);
+  if (!Number.isFinite(W) || !Number.isFinite(H) || W <= 0 || H <= 0) {
+    return out;
+  }
+  const band = (bandTop === undefined || bandTop === null)
+    ? europeBandTop(H) : Number(bandTop);
+  const touches = (a, b) => (a.lx <= b.lx + b.w && b.lx <= a.lx + a.w &&
+    a.ly <= b.ly + b.h && b.ly <= a.ly + a.h);
+  for (const d of (dots || [])) {
+    if (!d) continue;
+    const name = String(d.name === null || d.name === undefined ? "" : d.name);
+    const px = Number(d.x), py = Number(d.y);
+    if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+    const box = europeLabelBox(name);
+    const lx = px + EUROPE_LABEL_GAP;
+    const ly = py - box.h / 2;
+    if (lx < 0 || ly < 0 || lx + box.w > W) continue;
+    if (Number.isFinite(band) && ly + box.h >= band) continue;
+    const cand = { name, x: px, y: py, w: box.w, h: box.h, lx, ly };
+    let hit = false;
+    for (const k of out) {
+      if (touches(cand, k)) { hit = true; break; }
+    }
+    if (hit) continue;
+    out.push(cand);
+  }
+  return out;
+}
+
 // ---------- Browser part: the SVG annotation overlay ----------
 // Everything below runs only in the page. Annotate.init(map, container)
 // creates one SVG the size of the map; setCallouts draws leader lines and
@@ -265,6 +392,7 @@ let annotateDrawn = {};
 let annotateLastView = "";
 let annotateSam = null; // {ring: [[lon,lat]...], label: string} or null
 let annotateSamDrawn = false;
+let annotateEurope = []; // [{lon, lat, name, dresden}] Europe outro labels (8c-3)
 let annotateReticles = []; // [{lon, lat}] high-marker reticles (phase 8a)
 let annotateRings = null; // {lon, lat, radii:[m...]} or null (phase 7d HUD)
 let annotateRingAngles = [0, 0];
@@ -324,23 +452,36 @@ function annotateProject(lon, lat) {
 // edge, a rect, and up to two text lines. A new callout's line draws
 // itself with stroke-dashoffset over 0.6 s; reprojections of an already
 // drawn callout appear drawn (no restarted animation). Under reduced
-// motion everything appears drawn.
+// motion everything appears drawn. Phase 8c-1 span callouts (scenes 5-6,
+// co.spanCallout): the bracketed label with no filled box, the span name
+// in mono uppercase over the mm/yr value in 18 px mono.
 function annotateDrawOne(co, pt, mapW, mapH, isNew, placed) {
   const g = annotateSvgEl("g", { "class": "annotate-callout", "data-id": co.id });
+  const spanStyle = !!(co && co.spanCallout);
   const labelW = co.w || 168;
-  const labelH = co.sub ? 40 : 26;
-  const pos = placeLabel(pt, labelW, labelH, mapW, mapH, { placed: placed || [] });
+  const labelH = spanStyle ? 48 : (co.sub ? 40 : 26);
+  const placeOpts = { placed: placed || [] };
+  if (spanStyle && typeof ANNOTATE_SPAN_GAP === "number") {
+    placeOpts.gap = ANNOTATE_SPAN_GAP;
+  }
+  const pos = placeLabel(pt, labelW, labelH, mapW, mapH, placeOpts);
   if (Array.isArray(placed)) placed.push({ x: pos.x, y: pos.y, w: labelW, h: labelH });
   const boxCx = pos.x + labelW / 2;
   const boxCy = pos.y + labelH / 2;
-  // Leader endpoint: the box edge nearest the point.
-  const ex = Math.max(pos.x, Math.min(pos.x + labelW, pt.x));
-  const ey = Math.max(pos.y, Math.min(pos.y + labelH, pt.y));
+  // Leader line: the map point to the box edge nearest the point. The
+  // explicit stroke attributes match the .annotate-line rule, so the line
+  // draws over the map even where the stylesheet custom properties fail;
+  // the SVG itself sits above the deck canvas (story.css z-index).
+  const ends = calloutLineEnds(pt, pos, labelW, labelH);
+  const ex = ends.x2, ey = ends.y2;
   const line = annotateSvgEl("line", {
-    x1: String(pt.x), y1: String(pt.y), x2: String(ex), y2: String(ey),
-    "class": "annotate-line"
+    x1: String(ends.x1), y1: String(ends.y1),
+    x2: String(ends.x2), y2: String(ends.y2),
+    "class": "annotate-line",
+    "stroke": "#bfd6ff", "stroke-width": "1",
+    "stroke-opacity": "0.6", "opacity": "0.95"
   });
-  const len = Math.max(1, Math.hypot(ex - pt.x, ey - pt.y));
+  const len = Math.max(1, ends.len);
   const reduced = annotateReduced();
   const animate = isNew && !reduced;
   if (animate) {
@@ -352,13 +493,17 @@ function annotateDrawOne(co, pt, mapW, mapH, isNew, placed) {
     cx: String(pt.x), cy: String(pt.y), r: "3", "class": "annotate-dot"
   });
   g.appendChild(dot);
-  const rect = annotateSvgEl("rect", {
-    x: String(pos.x), y: String(pos.y), width: String(labelW),
-    height: String(labelH), rx: "2", "class": "annotate-box"
-  });
-  g.appendChild(rect);
-  // Bracketed label: four 8 px corner ticks over the glass box.
-  const cs = 8;
+  let rect = null;
+  if (!spanStyle) {
+    rect = annotateSvgEl("rect", {
+      x: String(pos.x), y: String(pos.y), width: String(labelW),
+      height: String(labelH), rx: "2", "class": "annotate-box"
+    });
+    g.appendChild(rect);
+  }
+  // Bracketed label: four corner ticks over the glass box (8 px; the
+  // span callout carries the 12 px brackets from spec section 5).
+  const cs = spanStyle ? 12 : 8;
   const corners = [
     `M ${pos.x} ${pos.y + cs} L ${pos.x} ${pos.y} L ${pos.x + cs} ${pos.y}`,
     `M ${pos.x + labelW - cs} ${pos.y} L ${pos.x + labelW} ${pos.y} L ${pos.x + labelW} ${pos.y + cs}`,
@@ -376,7 +521,8 @@ function annotateDrawOne(co, pt, mapW, mapH, isNew, placed) {
   g.appendChild(t1);
   if (co.sub) {
     const t2 = annotateSvgEl("text", {
-      x: String(pos.x + 8), y: String(pos.y + 32), "class": "annotate-sub"
+      x: String(pos.x + 8), y: String(pos.y + (spanStyle ? 38 : 32)),
+      "class": spanStyle ? "annotate-span-value" : "annotate-sub"
     });
     t2.textContent = co.sub;
     g.appendChild(t2);
@@ -393,7 +539,7 @@ function annotateDrawOne(co, pt, mapW, mapH, isNew, placed) {
   if (animate && annotateHasGsap()) {
     try {
       gsap.to(line.style, { strokeDashoffset: 0, duration: 0.6, ease: "power2.out" });
-      gsap.from(rect, { opacity: 0, duration: 0.3 });
+      if (rect) gsap.from(rect, { opacity: 0, duration: 0.3 });
       gsap.from(t1, { opacity: 0, duration: 0.3 });
     } catch (e) {
       line.style.strokeDashoffset = "0";
@@ -450,6 +596,50 @@ function AnnotateUpdate() {
   if (annotateReticles.length) {
     try { annotateDrawReticles(w, h); } catch (e) { /* ignore */ }
   }
+  if (annotateEurope.length) {
+    try { annotateDrawEurope(w, h); } catch (e) { /* ignore */ }
+  }
+}
+
+// Phase 8c-3 Europe labels: each lit city's name 8 px right of its dot
+// (mono 11 px uppercase, --fg at 70%), Dresden with the red reticle.
+// Labels that would touch the lower-third band or another label are
+// dropped via europeKeptLabels, never overlapped. Dresden's reticle draws
+// at its dot even when its label drops.
+function annotateDrawEurope(mapW, mapH) {
+  const dots = [];
+  let dresdenPt = null;
+  for (const c of annotateEurope) {
+    if (!c) continue;
+    const pt = annotateProject(c.lon, c.lat);
+    if (!pt) continue;
+    if (pt.x < -50 || pt.y < -50 || pt.x > mapW + 50 || pt.y > mapH + 50) {
+      continue;
+    }
+    if (c.dresden) dresdenPt = pt;
+    dots.push({ name: c.name || "", x: pt.x, y: pt.y });
+  }
+  if (dresdenPt) {
+    annotateSvg.appendChild(annotateSvgEl("circle", {
+      cx: dresdenPt.x.toFixed(1), cy: dresdenPt.y.toFixed(1), r: "11",
+      "class": "reticle-spin"
+    }));
+  }
+  let kept = [];
+  try {
+    const band = (typeof europeBandTop === "function")
+      ? europeBandTop(mapH) : mapH;
+    kept = europeKeptLabels(dots, mapW, mapH, band);
+  } catch (e) { kept = []; }
+  for (const k of kept) {
+    const t = annotateSvgEl("text", {
+      x: k.lx.toFixed(1), y: (k.ly + 11).toFixed(1),
+      "class": "annotate-europe-label"
+    });
+    try { t.textContent = String(k.name || "").toUpperCase(); }
+    catch (e) { /* ignore */ }
+    annotateSvg.appendChild(t);
+  }
 }
 
 // Phase 8a high-marker reticles: a dashed ring (r 11 px) about each high
@@ -473,6 +663,22 @@ function annotateDrawReticles(mapW, mapH) {
 // dashboard re-sets it from the bound cutoff on every month change.
 function AnnotateSetReticles(list) {
   annotateReticles = (list || []).slice();
+  annotateSeq++;
+  annotateLastView = "";
+  AnnotateUpdate();
+}
+
+// Replace the Europe outro label list (each: {lon, lat, name, dresden}).
+// Story-owned like the callouts, so the full AnnotateClear drops it.
+function AnnotateSetEurope(list) {
+  annotateEurope = (list || []).slice();
+  annotateSeq++;
+  annotateLastView = "";
+  AnnotateUpdate();
+}
+
+function AnnotateClearEurope() {
+  annotateEurope = [];
   annotateSeq++;
   annotateLastView = "";
   AnnotateUpdate();
@@ -676,6 +882,7 @@ function AnnotateClear(prefix) {
   if (!prefix) {
     annotateCallouts = [];
     annotateDrawn = {};
+    annotateEurope = [];
     annotateSam = null;
     annotateSamDrawn = false;
     annotateRings = null;
@@ -748,11 +955,18 @@ function AnnotateClearRings() {
   AnnotateUpdate();
 }
 
-// Phase 7d HUD data block: four sparse lines from the bound month's data
-// only (name, cutoff, rank/z, worry word with the technical term in small
-// print). aria-live="polite", updated once per call — callers set it once
-// per month change so it announces once. Nothing inside is focusable.
-function AnnotateSetHud(data) {
+// Phase 7d HUD data block, restyled 8c-1 (spec section 5): the
+// bracket-framed glass card, 300 px: the bridge name in 22 px display,
+// then four readouts in a 2 x 2 grid (CUTOFF, RANK, Z, RISK) as
+// label-over-value pairs, the worry word in display face coloured by
+// class on one line. Same bound-month data as before (name, cutoff, rank, n, z,
+// risk). opts.transition "count" counts the values up over 600 ms (scene
+// 5's entry); "xfade" crossfades the card over 600 ms (the month change
+// into scene 6); omitted (Explore) counts on first show only. Reduced
+// motion always shows final values. aria-live="polite", updated once
+// per call — callers set it once per month change so it announces once.
+// Nothing inside is focusable.
+function AnnotateSetHud(data, opts) {
   if (typeof document === "undefined") return;
   const d = data || {};
   let box = null;
@@ -807,22 +1021,48 @@ function AnnotateSetHud(data) {
   const nTxt = (d.n === null || d.n === undefined) ? "—" : String(d.n);
   const zTxt = (d.z === null || d.z === undefined || Number.isNaN(Number(d.z)))
     ? "—" : Number(d.z).toFixed(2);
+  const riskClass = (d.risk === "high" || d.risk === "elevated" ||
+    d.risk === "watch" || d.risk === "none") ? d.risk : "unknown";
   try {
     const L = lines.lines || [];
     box.innerHTML =
       `<div class="hud-name">${escHud(L[0] || "")}</div>` +
-      `<div class="hud-cutoff">${escHud(L[1] || "")}</div>` +
-      `<div class="hud-rank">rank ${numSpan(d.rank, 0)} of ${escHud(nTxt)} ` +
-      `· z ${numSpan(d.z, 2)}` +
-      `<span class="visually-hidden">rank ${escHud(rTxt)} of ` +
-      `${escHud(nTxt)}, z ${escHud(zTxt)}</span></div>` +
-      `<div class="hud-risk">${escHud(L[3] || "")} ` +
-      `<small>${escHud(lines.tech || "")}</small></div>`;
+      `<div class="hud-grid">` +
+      `<div class="fui-readout hud-ro--cutoff">` +
+      `<span class="ro-label">CUTOFF</span>` +
+      `<span class="ro-value">${escHud(L[1] || "")}</span></div>` +
+      `<div class="fui-readout hud-ro--rank">` +
+      `<span class="ro-label">RANK</span>` +
+      `<span class="ro-value">${numSpan(d.rank, 0)} of ${escHud(nTxt)}</span></div>` +
+      `<div class="fui-readout hud-ro--z">` +
+      `<span class="ro-label">Z</span>` +
+      `<span class="ro-value">${numSpan(d.z, 2)}</span></div>` +
+      `<div class="fui-readout hud-ro--risk">` +
+      `<span class="ro-label">RISK</span>` +
+      `<span class="ro-value hud-worry risk-${riskClass}">` +
+      `${escHud(L[3] || "")}</span></div>` +
+      `</div>` +
+      `<span class="visually-hidden">${escHud(L[1] || "")}, ` +
+      `rank ${escHud(rTxt)} of ${escHud(nTxt)}, z ${escHud(zTxt)}, ` +
+      `${escHud(L[3] || "")}</span>`;
     box.removeAttribute("hidden");
   } catch (e) { /* ignore */ }
-  // First appearance counts the numbers up over 600 ms (linear); later
-  // month changes and reduced motion show final values.
-  if (firstShow && !annotateReduced()) {
+  // Transitions: "count" counts the numbers up over 600 ms (linear),
+  // "xfade" crossfades the card over 600 ms; omitted counts on first
+  // show only (Explore). Reduced motion shows final values.
+  const want = (opts && opts.transition) ||
+    (firstShow ? "count" : "none");
+  if (annotateReduced()) return;
+  if (want === "xfade") {
+    try {
+      if (annotateHasGsap()) {
+        gsap.fromTo(box, { opacity: 0 },
+          { opacity: 1, duration: 0.6, ease: "power1.out" });
+      }
+    } catch (e) { /* the new values are already drawn */ }
+    return;
+  }
+  if (want === "count") {
     try {
       const spans = box.querySelectorAll("[data-fui-count]");
       for (const sp of Array.from(spans || [])) {
@@ -920,9 +1160,13 @@ function AnnotateTweenCounter(calloutId, fromRank, toRank, n, fromZ, toZ, dur) {
   }
 }
 
-// Render the bridge side view into a host SVG element: baseline, pillars
-// between blocks, deck blocks displaced by the month's anomaly, and the
-// exaggeration label. Animates displacement over 300 ms (0 reduced).
+// Render the bridge side view into a host SVG element (phase 8c-1, spec
+// section 5): the spans as 1 px-outlined prisms (fill at 35 %) on a
+// hairline baseline with 6 px pier ticks, the worst span filled solid,
+// each prism displaced by the month's anomaly. The exaggeration factor
+// is not drawn here: the story card carries VERTICAL ×N in its title
+// and Explore's note carries it beneath. Animates displacement over
+// 300 ms (0 reduced).
 function AnnotateRenderSideView(svg, spans, cutoffIdx, lenM, opts) {
   if (!svg) return null;
   const o = opts || {};
@@ -930,6 +1174,13 @@ function AnnotateRenderSideView(svg, spans, cutoffIdx, lenM, opts) {
   const W = geo.width, baseY = geo.baselineY;
   const H = o.height || 110;
   const NS = "http://www.w3.org/2000/svg";
+  let worst = null;
+  try {
+    if (typeof fastestSpan === "function") {
+      worst = fastestSpan(spans, cutoffIdx);
+    }
+  } catch (e) { worst = null; }
+  const worstSpan = (worst && worst.span !== undefined) ? worst.span : null;
   // Previous block positions so re-renders (slider, story steps) tween
   // from the current displacement instead of jumping from flat.
   let prevY = null;
@@ -949,33 +1200,34 @@ function AnnotateRenderSideView(svg, spans, cutoffIdx, lenM, opts) {
     svg.appendChild(el);
     return el;
   };
-  mk("line", { x1: "6", y1: String(baseY + 26), x2: String(W - 6),
-    y2: String(baseY + 26), "class": "deck-ground" });
-  // Pillars between blocks, from the baseline down to the ground.
+  mk("line", { x1: "6", y1: String(baseY), x2: String(W - 6),
+    y2: String(baseY), "class": "deck-baseline" });
+  // Pier ticks between blocks: 6 px down from the baseline.
   const xs = geo.blocks.map((b) => b.x).sort((a, b) => a - b);
   for (let i = 0; i + 1 < xs.length; i++) {
     const px = (xs[i] + xs[i + 1]) / 2;
-    mk("rect", { x: String(px - 2), y: String(baseY + 6), width: "4",
-      height: "20", "class": "deck-pillar" });
+    mk("line", { x1: String(px), y1: String(baseY),
+      x2: String(px), y2: String(baseY + 6), "class": "deck-tick" });
   }
-  mk("line", { x1: "6", y1: String(baseY), x2: String(W - 6),
-    y2: String(baseY), "class": "deck-baseline" });
   const reduced = annotateReduced();
   for (const b of geo.blocks) {
     const y = baseY - geo.blockH / 2 + b.dy;
+    const solid = !b.isNull && worstSpan !== null &&
+      Number(b.span) === Number(worstSpan);
     const r = mk("rect", { x: String(b.x - b.w / 2), y: String(y),
       width: String(b.w), height: String(geo.blockH), rx: "2",
-      "class": "deck-block" + (b.isNull ? " is-null" : "") });
+      "class": "deck-block" + (b.isNull ? " is-null" : "") +
+        (solid ? " is-worst" : "") });
     r.setAttribute("fill", b.color);
+    r.setAttribute("fill-opacity", solid ? "1" : "0.35");
+    r.setAttribute("stroke", b.color);
+    r.setAttribute("stroke-width", "1");
     const tip = (b.value === null) ? `span ${b.span}: no data`
       : `span ${b.span}: ${formatSpanValue(b.value)}`;
     const title = document.createElementNS(NS, "title");
     title.textContent = tip;
     r.appendChild(title);
   }
-  const lab = mk("text", { x: String(W - 6), y: String(H - 6),
-    "class": "deck-factor", "text-anchor": "end" });
-  lab.textContent = `vertical ×${geo.factor.toFixed(1)}`;
   // Animate displacement over 300 ms (static under reduced motion):
   // first render rises from flat, re-renders tween from the previous
   // displacement to the new one.
@@ -1001,6 +1253,9 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     formatCounter, formatSpanValue, formatRankCounter, formatSamLabel,
     projectPath, placeLabel, spanColor, riskColor, fastestSpan,
-    deckGeometry, exploreCalloutsFor
+    deckGeometry, exploreCalloutsFor, calloutLineEnds, s2ChipProject,
+    europeLabelBox, europeBandTop, europeKeptLabels,
+    ANNOTATE_SPAN_GAP, ANNOTATE_SPAN_LABEL_W, ANNOTATE_SPAN_LABEL_H,
+    EUROPE_LABEL_GAP, EUROPE_LABEL_H, EUROPE_LABEL_CHAR_W
   };
 }

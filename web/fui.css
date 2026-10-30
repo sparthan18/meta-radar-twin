@@ -52,6 +52,7 @@
   --fs-48: 48px;
   --fs-72: 72px;
   --fs-112: 112px;
+  --fs-120: 120px;
   --fs-160: 160px;
 
   /* ---- component measures (spec section 5) ---- */
@@ -238,6 +239,17 @@ body {
   letter-spacing: 0.08em;
 }
 
+/* Span callout value (scenes 5-6): the mm/yr figure in 18 px mono
+   beneath the uppercase span name; the label has brackets, no box. */
+.annotate-span-value {
+  fill: var(--text);
+  font-family: var(--font-data);
+  font-size: var(--fs-18);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
 .annotate-counter {
   fill: var(--text);
   font-family: var(--font-data);
@@ -299,6 +311,17 @@ body {
   paint-order: stroke;
   stroke: rgba(7, 11, 20, 0.85);
   stroke-width: 4px;
+}
+
+/* Europe outro labels (scene 9): mono 11 px uppercase in --fg at 70 %,
+   drawn 8 px right of the dot with no box and no leader line. */
+.annotate-europe-label {
+  fill: rgba(230, 238, 252, 0.7);
+  font-family: var(--font-data);
+  font-size: var(--fs-11);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 @media (prefers-reduced-motion: reduce) {

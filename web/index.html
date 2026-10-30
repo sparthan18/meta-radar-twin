@@ -227,45 +227,74 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
     <div id="sceneDip" aria-hidden="true"></div>
     <div id="letterTop" class="letterbox" aria-hidden="true"></div>
     <div id="letterBottom" class="letterbox" aria-hidden="true"></div>
-    <div id="storyLanding">
-      <h2>RadarTwin Dresden</h2>
-      <p>Three years of satellite radar over 20 bridges — and the month the data flagged one for inspection.</p>
-      <button id="storyPlay" type="button" disabled>Play</button>
+    <div id="storyPreloader" aria-hidden="true">
+      <svg class="preloader-word" viewBox="0 0 640 120" role="img" aria-label="Loading RadarTwin">
+        <text x="320" y="82" text-anchor="middle" class="preloader-text">RADARTWIN</text>
+      </svg>
     </div>
-    <div id="sceneTitle" hidden><strong>RadarTwin Dresden</strong><span>A bridge watchlist hindcast, Jan 2022 – Sep 2024</span></div>
+    <div id="storyLanding">
+      <span class="landing-corner tl" aria-hidden="true"></span>
+      <span class="landing-corner tr" aria-hidden="true"></span>
+      <span class="landing-corner bl" aria-hidden="true"></span>
+      <span class="landing-corner br" aria-hidden="true"></span>
+      <div class="landing-center">
+        <h2 class="landing-word">RADARTWIN</h2>
+        <p class="landing-sub">DRESDEN · 2022 – 2024</p>
+      </div>
+      <button id="storyPlay" type="button" disabled aria-label="Play the story">
+        <span class="play-ring" aria-hidden="true"><svg viewBox="0 0 20 24" width="20" height="24"><path d="M5 3 L17 12 L5 21 Z"/></svg></span>
+        <span class="play-word" aria-hidden="true">PLAY</span>
+      </button>
+      <p class="landing-tag">The data flagged it first.</p>
+    </div>
+    <div id="sceneTitle" hidden><strong>RADARTWIN</strong><span>DRESDEN · 2022 – 2024</span></div>
     <div id="sceneCover" hidden><span>Loading the radar explainer…</span></div>
     <div id="sceneDim" hidden></div>
-    <div id="sceneMemo" class="fui-panel" hidden aria-label="Inspection memo">
-      <h3 id="sceneMemoTitle">Inspection memo</h3>
-      <div id="sceneMemoBody" aria-live="off"></div>
-    </div>
-    <div id="sceneProof" hidden aria-label="Truncation proof">
-      <div class="proof-card fui-panel">
-        <div class="proof-cols">
-          <div class="proof-col"><h4>full run</h4>
-            <div class="proof-val"><span class="proof-k">score</span> <span id="proofScoreFull">0.00</span></div>
-            <div class="proof-val"><span class="proof-k">z</span> <span id="proofZFull">0.00</span></div>
-          </div>
-          <div class="proof-col"><h4>future deleted</h4>
-            <div class="proof-val"><span class="proof-k">score</span> <span id="proofScoreTrunc">0.00</span></div>
-            <div class="proof-val"><span class="proof-k">z</span> <span id="proofZTrunc">0.00</span></div>
-          </div>
-        </div>
-        <ul class="proof-list" id="proofList"></ul>
-        <div class="proof-foot" id="proofFoot"></div>
+    <div id="storySidePanel" class="fui-panel" hidden aria-label="Story side panel">
+      <div id="sceneMemo" hidden aria-label="Inspection memo">
+        <h3 id="sceneMemoTitle">Inspection memo</h3>
+        <div id="sceneMemoBody" aria-live="off"></div>
       </div>
+      <div id="sceneProof" hidden aria-label="Truncation proof">
+        <div class="proof-card">
+          <div class="proof-cols">
+            <div class="proof-col"><h4>full run</h4>
+              <div class="proof-val"><span class="proof-k">score</span> <span id="proofScoreFull">0.00</span></div>
+              <div class="proof-val"><span class="proof-k">z</span> <span id="proofZFull">0.00</span></div>
+            </div>
+            <div class="proof-col"><h4>future deleted</h4>
+              <div class="proof-val"><span class="proof-k">score</span> <span id="proofScoreTrunc">0.00</span></div>
+              <div class="proof-val"><span class="proof-k">z</span> <span id="proofZTrunc">0.00</span></div>
+            </div>
+          </div>
+          <ul class="proof-list" id="proofList"></ul>
+          <div class="proof-foot" id="proofFoot"></div>
+        </div>
+      </div>
+    </div>
+    <div id="sceneEvidence" class="fui-panel" hidden aria-label="Evidence card">
+      <h3 id="sceneEvidenceTitle">EVIDENCE — SENTINEL-2 · 10 m</h3>
+      <div class="evidence-chip">
+        <img id="sceneEvidenceImg" src="data/s2_visual.png" alt="Sentinel-2 chip around Carolabrücke" width="93" height="91">
+        <svg id="sceneEvidenceSvg" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+      <div id="sceneEvidenceFoot">SAM 3.1 · score — · IoU —</div>
     </div>
     <div id="sceneEuropeNote" hidden>cities shown as examples of EGMS coverage</div>
     <div id="caption"></div>
     <div id="captionLive" class="visually-hidden" aria-live="polite"></div>
     <div id="sceneTag" hidden></div>
     <div id="sceneIndex" aria-hidden="true" hidden>01 / 09</div>
+    <div id="sceneMonthWord" hidden aria-hidden="true"><span class="mw-month">SEPTEMBER</span><span class="mw-year">2024</span></div>
     <div id="deckHud" class="fui-panel fui-panel--sm" hidden aria-live="polite"></div>
     <div id="storyCallouts"></div>
     <div id="dateRoll" hidden></div>
-    <div id="storyEnd" hidden>
-      <div class="story-end-card fui-panel">
-        <p id="storyEndLine1"></p>
+    <div id="storyEnd" hidden aria-label="Story ending">
+      <div class="story-end-col">
+        <div id="storyEndDate" aria-hidden="true"></div>
+        <p id="storyEndLine1" class="visually-hidden"></p>
+        <div id="storyEndKicker" aria-hidden="true"></div>
+        <div id="storyEndMain" aria-hidden="true"></div>
         <p id="storyEndLine2"></p>
         <div class="story-end-actions">
           <button id="btnReplay" type="button" class="fui-btn">Replay</button>
@@ -787,7 +816,7 @@ function initMap() {
   map = new maplibregl.Map({
     container: "map",
     style: fuiStyle,
-    center: [13.745, 51.057], zoom: REDUCED ? 12 : 11, pitch: 55, maxPitch: 75
+    center: [13.745, 51.057], zoom: REDUCED ? 12.3 : 11, pitch: 55, maxPitch: 75
   });
   map.addControl(new maplibregl.NavigationControl(), "top-left");
   map.on("load", () => {
@@ -844,7 +873,8 @@ function initMap() {
         layout: { visibility: "none" } });
     }
     map.addLayer({ id: "bridges-fill", type: "fill", source: "bridges",
-      paint: { "fill-color": riskExpr, "fill-opacity": 0.38,
+      paint: { "fill-color": riskExpr,
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0.12, 15, 0.38],
         "fill-color-transition": { duration: DUR_BRIDGE } } });
     map.addLayer({ id: "bridges-line", type: "line", source: "bridges",
       filter: ["==", ["get", "monitored"], true],
@@ -893,8 +923,9 @@ function initMap() {
     map.addLayer({ id: "bridges-reticle", type: "circle", source: "bridge-centroids",
       maxzoom: 15,
       paint: { "circle-color": "rgba(0, 0, 0, 0)", "circle-radius": 7,
-        "circle-stroke-color": "rgba(143, 184, 255, 0.28)",
-        "circle-stroke-width": 1, "circle-stroke-opacity": 1 } });
+        "circle-stroke-color": riskExpr,
+        "circle-stroke-width": 1, "circle-stroke-opacity": 1,
+        "circle-stroke-color-transition": { duration: DUR_BRIDGE } } });
     map.addLayer({ id: "bridges-markers-hit", type: "circle",
       source: "bridge-centroids", maxzoom: 15,
       paint: { "circle-color": "rgba(0, 0, 0, 0)", "circle-radius": 12,
@@ -971,7 +1002,15 @@ function initMap() {
     } catch (e) { /* ignore */ }
     applyCutoff();
     if (!REDUCED) {
-      try { map.easeTo({ center: [13.745, 51.057], zoom: 12, duration: 2000 }); } catch (e) {}
+      // Landing settle onto the scene-1 framing (8b: zoom 12.3) on the
+      // FUI ease-out curve when the story script has parsed.
+      try {
+        const easeOpts = { center: [13.745, 51.057], zoom: 12.3, duration: 2000 };
+        try {
+          if (typeof storyEaseOut === "function") easeOpts.easing = storyEaseOut;
+        } catch (e2) { /* default easing */ }
+        map.easeTo(easeOpts);
+      } catch (e) {}
     }
   });
   $("btnImagery").onclick = () => setBasemap("imagery");

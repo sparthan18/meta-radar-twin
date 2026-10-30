@@ -1,6 +1,7 @@
 "use strict";
-// RadarTwin vector basemap (phase 8a): the OpenFreeMap dark style restyled
-// to docs/design-spec.md section 4, with 3D buildings.
+// RadarTwin vector basemap (phases 8a-8b): the OpenFreeMap dark style
+// restyled to docs/design-spec.md section 4, with 3D buildings under the
+// 8b craft rules (graded extrusions, mapped light, sparse labels).
 //
 // The tile host was unreachable from the build environment, so the needed
 // layers are embedded here by hand (the phase allows either), written
@@ -28,6 +29,48 @@ const FUI_ATTRIBUTION = "© OpenMapTiles © OpenStreetMap contributors";
 const FUI_ESRI_IMAGERY =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
+// Phase 8b fix 4 atmosphere (design spec section 4): the MapLibre sky/fog
+// applied via map.setSky once the style loads, on in story mode and in
+// Explore, so the far city pales into haze.
+const FUI_SKY = {
+  "sky-color": "#070b14",
+  "horizon-color": "#0d1a33",
+  "fog-color": "#0a1326",
+  "fog-ground-blend": 0.6,
+  "horizon-fog-blend": 0.9,
+  "sky-horizon-blend": 0.5,
+  "atmosphere-blend": 0.8
+};
+
+function buildFuiSky() {
+  return Object.assign({}, FUI_SKY);
+}
+
+// Apply the sky to a live map. Guarded: a MapLibre without setSky (or no
+// map yet) does not throw. Returns true when setSky ran.
+function applyFuiSky(map) {
+  try {
+    if (!map || typeof map.setSky !== "function") return false;
+    map.setSky(buildFuiSky());
+    return true;
+  } catch (e) { return false; }
+}
+
+// Structural check for a sky object. Returns a list of problem strings
+// (empty when valid); tests plant each failure mode to prove it is caught.
+function validateFuiSky(sky) {
+  const problems = [];
+  const s = sky || {};
+  if (s["sky-color"] !== "#070b14") problems.push("sky-color is not #070b14");
+  if (s["horizon-color"] !== "#0d1a33") problems.push("horizon-color is not #0d1a33");
+  if (s["fog-color"] !== "#0a1326") problems.push("fog-color is not #0a1326");
+  if (s["fog-ground-blend"] !== 0.6) problems.push("fog-ground-blend is not 0.6");
+  if (s["horizon-fog-blend"] !== 0.9) problems.push("horizon-fog-blend is not 0.9");
+  if (s["sky-horizon-blend"] !== 0.5) problems.push("sky-horizon-blend is not 0.5");
+  if (s["atmosphere-blend"] !== 0.8) problems.push("atmosphere-blend is not 0.8");
+  return problems;
+}
+
 // The embedded vector layers, bottom to top: background, water, parks,
 // flat buildings, minor then major roads, rail, the 3D extrusion (right
 // after the flat buildings' neighbours, below the labels), place labels.
@@ -49,7 +92,7 @@ function buildVectorLayers() {
       filter: ["==", ["get", "class"], "park"],
       paint: { "fill-color": "#0d1a1f" } },
     { id: "fui-building", type: "fill", source: src, "source-layer": "building",
-      paint: { "fill-color": "#0d1526" } },
+      paint: { "fill-color": "#101a2e" } },
     { id: "fui-roads-minor", type: "line", source: src,
       "source-layer": "transportation",
       filter: ["in", ["get", "class"], ["literal", ["secondary", "tertiary"]]],
@@ -67,21 +110,29 @@ function buildVectorLayers() {
       paint: { "line-color": "rgba(143, 184, 255, 0.3)",
         "line-width": 1, "line-dasharray": [2, 2] } },
     { id: "fui-buildings-3d", type: "fill-extrusion", source: src,
-      "source-layer": "building", minzoom: 13,
-      paint: { "fill-extrusion-color": "#111a2c",
-        "fill-extrusion-opacity": 0.9,
-        "fill-extrusion-height": ["get", "render_height"],
-        "fill-extrusion-base": ["get", "render_min_height"],
+      "source-layer": "building",
+      paint: { "fill-extrusion-color": ["interpolate", ["linear"],
+          ["coalesce", ["get", "render_height"], 4],
+          0, "#223355", 40, "#4d6a9e"],
+        "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"],
+          13.3, 0, 13.9, 0.95],
+        "fill-extrusion-height": ["max", 4,
+          ["min", 60, ["coalesce", ["get", "render_height"], 4]]],
+        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
         "fill-extrusion-vertical-gradient": true } },
     { id: "fui-places", type: "symbol", source: src, "source-layer": "place",
-      filter: ["in", ["get", "class"],
-        ["literal", ["city", "town", "village", "suburb", "neighbourhood"]]],
+      maxzoom: 12.5,
+      filter: ["all",
+        ["in", ["get", "class"], ["literal", ["city", "suburb"]]],
+        ["<=", ["coalesce", ["get", "rank"], 99], 2]],
       layout: { "text-field": ["coalesce", ["get", "name:latin"], ["get", "name"]],
         "text-font": FUI_LABEL_FONT.slice(),
         "text-size": 11,
         "text-transform": "uppercase",
         "text-letter-spacing": 0.12,
-        "symbol-placement": "point" },
+        "symbol-placement": "point",
+        "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
+        "symbol-spacing": 250 },
       paint: { "text-color": "#8ea3c7",
         "text-halo-color": "#070b14", "text-halo-width": 1 } }
   ];
@@ -113,6 +164,12 @@ function buildFuiStyle(opts) {
   return {
     version: 8,
     glyphs: FUI_GLYPHS,
+    // Phase 8b fix 4 (design spec section 4): a hard, low, near-white
+    // light anchored to the map, so one face of every block is lit and
+    // the next is in shadow. The old soft light (0.4, cool #bcd0ff at
+    // [1.15, 210, 60]) left the walls one step above the background.
+    light: { anchor: "map", color: "#ffffff", intensity: 0.9,
+      position: [1.5, 100, 25] },
     sources: {
       openmaptiles: { type: "vector", url: FUI_VECTOR_TILES,
         attribution: FUI_ATTRIBUTION },
@@ -154,20 +211,49 @@ function validateFuiStyle(style) {
       problems.push(`unexpected vector source-layer ${l["source-layer"]} (${l.id})`);
     }
   }
+  // Phase 8b fix 4: a hard, low, near-white light anchored to the map
+  // (intensity 0.9, #ffffff, position [1.5, 100, 25]). The old soft
+  // light (0.4, #bcd0ff at [1.15, 210, 60]) fails every check below.
+  const light = s.light || {};
+  if (light.anchor !== "map") problems.push("light is not anchored to the map");
+  if (light.color !== "#ffffff") problems.push("light color is not near-white #ffffff");
+  if (light.intensity !== 0.9) problems.push("light intensity is not hard (0.9)");
+  if (JSON.stringify(light.position || []) !== JSON.stringify([1.5, 100, 25])) {
+    problems.push("light position is not [1.5, 100, 25]");
+  }
+  const flat = byId["fui-building"];
+  if (!flat) {
+    problems.push("flat building footprint layer is missing");
+  } else if ((flat.paint || {})["fill-color"] !== "#101a2e") {
+    problems.push("flat building footprints are not #101a2e");
+  }
   const ex = byId["fui-buildings-3d"];
   if (!ex) {
     problems.push("fill-extrusion layer is missing");
   } else {
     if (ex.type !== "fill-extrusion") problems.push("buildings layer is not a fill-extrusion");
-    if (ex.minzoom !== 13) problems.push("extrusion minzoom is not 13");
+    if (ex.minzoom !== undefined) problems.push("extrusion must not pop at a minzoom (opacity gates it)");
     const p = ex.paint || {};
-    if (p["fill-extrusion-color"] !== "#111a2c") problems.push("extrusion colour is not #111a2c");
-    if (p["fill-extrusion-opacity"] !== 0.9) problems.push("extrusion opacity is not 0.9");
-    if (JSON.stringify(p["fill-extrusion-height"]) !== JSON.stringify(["get", "render_height"])) {
-      problems.push("extrusion height is not render_height");
+    if (JSON.stringify(p["fill-extrusion-color"]) !== JSON.stringify(
+        ["interpolate", ["linear"],
+          ["coalesce", ["get", "render_height"], 4],
+          0, "#223355", 40, "#4d6a9e"])) {
+      problems.push("extrusion colour is not the height grade #223355-#4d6a9e (0-40 m)");
     }
-    if (JSON.stringify(p["fill-extrusion-base"]) !== JSON.stringify(["get", "render_min_height"])) {
+    if (JSON.stringify(p["fill-extrusion-opacity"]) !== JSON.stringify(
+        ["interpolate", ["linear"], ["zoom"], 13.3, 0, 13.9, 0.95])) {
+      problems.push("extrusion opacity does not fade in across zoom 13.3-13.9 to 0.95");
+    }
+    if (JSON.stringify(p["fill-extrusion-height"]) !== JSON.stringify(
+        ["max", 4, ["min", 60, ["coalesce", ["get", "render_height"], 4]]])) {
+      problems.push("extrusion height is not render_height clamped to 4-60 m");
+    }
+    if (JSON.stringify(p["fill-extrusion-base"]) !== JSON.stringify(
+        ["coalesce", ["get", "render_min_height"], 0])) {
       problems.push("extrusion base is not render_min_height");
+    }
+    if (p["fill-extrusion-vertical-gradient"] !== true) {
+      problems.push("extrusion vertical gradient is off");
     }
   }
   const labels = byId["fui-places"];
@@ -179,6 +265,20 @@ function validateFuiStyle(style) {
         font[0] !== "Noto Sans Regular") {
       problems.push("label font stack is not [\"Noto Sans Regular\"]");
     }
+    if (labels.maxzoom !== 12.5) problems.push("labels do not stop at zoom 12.5");
+    if (JSON.stringify(labels.filter) !== JSON.stringify(["all",
+        ["in", ["get", "class"], ["literal", ["city", "suburb"]]],
+        ["<=", ["coalesce", ["get", "rank"], 99], 2]])) {
+      problems.push("labels are not city/suburb with rank <= 2");
+    }
+    const lay = labels.layout || {};
+    if (JSON.stringify(lay["symbol-sort-key"]) !==
+        JSON.stringify(["coalesce", ["get", "rank"], 99])) {
+      problems.push("labels have no rank sort key");
+    }
+    if (!(lay["symbol-spacing"] >= 200)) {
+      problems.push("label spacing does not cap on-screen density");
+    }
   }
   return problems;
 }
@@ -186,7 +286,8 @@ function validateFuiStyle(style) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     FUI_VECTOR_TILES, FUI_GLYPHS, FUI_LABEL_FONT, FUI_ATTRIBUTION,
-    FUI_ESRI_IMAGERY,
-    buildVectorLayers, FuiVectorLayerIds, buildFuiStyle, validateFuiStyle
+    FUI_ESRI_IMAGERY, FUI_SKY,
+    buildVectorLayers, FuiVectorLayerIds, buildFuiStyle, validateFuiStyle,
+    buildFuiSky, applyFuiSky, validateFuiSky
   };
 }
