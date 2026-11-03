@@ -900,6 +900,19 @@ check("8c-3 scrub line stays above the ending sheet",
   cssBlock8("#storyEnd {").indexOf("z-index: 20") !== -1 &&
   storyCss.indexOf("#storyBar") !== -1);
 
+// --- phase 9a item 7: CDN/tile watchdog ---
+check("9a watchdog shows the offline line in the preloader",
+  indexHtml.indexOf("Could not reach the map or script hosts. Check the connection and reload.") !== -1 &&
+  indexHtml.indexOf("6000") !== -1 &&
+  indexHtml.indexOf('typeof maplibregl === "undefined"') !== -1 &&
+  indexHtml.indexOf('typeof gsap === "undefined"') !== -1 &&
+  indexHtml.indexOf('typeof THREE === "undefined"') !== -1 &&
+  indexHtml.indexOf('getElementById("storyPreloader")') !== -1 &&
+  indexHtml.indexOf("font-family:monospace") !== -1);
+check("planted: removed watchdog text is caught",
+  indexHtml.indexOf("Could not reach the map or script hosts. Check the connection and reload.") !== -1 &&
+  indexHtml.replace("Could not reach the map or script hosts. Check the connection and reload.", "").indexOf("Could not reach the map or script hosts. Check the connection and reload.") === -1);
+
 if (failures) {
   console.log(`test_fui: FAIL (${failures} failure(s))`);
   process.exit(1);

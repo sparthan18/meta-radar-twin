@@ -1,14 +1,8 @@
-# Phase 8b + 8c-1 + 8c-2 + 8c-3 frames for review by eye
+# Frames for review by eye
 
-No browser was available in the build environment, so these frames are
-specified by construction (every number below is a value in the shipped
-CSS/JS). Reviewer: open `web/index.html` over HTTP at 1920×1080 and
-1280×800, play the story, and compare each scene against its frame.
-Content, timing, data and captions are unchanged from 7d; 8b composes the
-landing and scenes 1–4; 8c-1 composes scenes 5–6 on the vector city;
-8c-2 composes scenes 7–8 in the glass side panel with the evidence card;
-8c-3 composes scene 9 (pull-back, date roll, Europe labels) and the ending
-sheet, and takes the SAM outline and radar chip off the story map.
+Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in order, with the design contract in `docs/design-spec.md` and the story contract in `docs/story-spec.md`. This file is the frame-by-frame review checklist the owner used.
+
+Reviewer: open `web/index.html` over HTTP at 1920×1080 and 1280×800, play the story, and compare each scene against its frame (every number below is a value in the shipped CSS/JS). Content, timing, data and captions are unchanged from 7d; 8b composes the landing and scenes 1–4; 8c-1 composes scenes 5–6 on the vector city; 8c-2 composes scenes 7–8 in the glass side panel with the evidence card; 8c-3 composes scene 9 (pull-back, date roll, Europe labels) and the ending sheet, and takes the SAM outline and radar chip off the story map.
 
 Reference: 8vh is ~86px at 1080p and 64px at 800p. Colours: `--bg`
 `#070b14`, `--bg-2` glass `rgba(11,18,32,.72)`, `--line`

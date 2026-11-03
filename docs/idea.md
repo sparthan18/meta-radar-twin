@@ -26,14 +26,14 @@ the processed product (EGMS) for free. Almost nobody turns that feed into a deci
 4. **Scores honestly.** A rolling retrospective uses only data before each monthly cutoff, so lead
    time can never leak from the future. Each bridge is scored on reliability-weighted differential
    motion, against its own history and against every other bridge in the city.
-5. **Decides with probabilities.** TypeSafe Jev answers three typed questions per asset per cutoff:
+5. **Decides with probabilities.** Muse Spark answers three typed questions per asset per cutoff:
    motion pattern, risk level, inspect yes/no, each with a probability.
 6. **Explains.** Muse Spark runs the audit as a tool-calling agent over those functions and writes
    the engineering memo plus a GeoJSON hazard layer. It narrates; it never decides.
-7. **Shows it.** A MapLibre twin over satellite imagery: bridges coloured by risk, a cutoff-date
+7. **Shows it.** A MapLibre twin over the OpenFreeMap vector basemap (satellite imagery as an option): bridges coloured by risk, a cutoff-date
    scrubber, per-span anomaly charts, scatterers and radar amplitude as toggles.
 
-## What it has shown so far (Dresden, 19 bridges, EGMS 2020–2024)
+## What it has shown so far (Dresden, 20 bridges in the data, 19 monitored, EGMS 2020–2024)
 
 - The pipeline reproduces the official EGMS velocities to 0.1 mm/yr.
 - Carola was the most anomalous bridge in the city in October 2023 (eleven months before
@@ -43,7 +43,7 @@ the processed product (EGMS) for free. Almost nobody turns that feed into a deci
 - The signal is differential motion along the deck, not bulk settlement.
 - Visible false positives: the Albert Bridge ranked first in September 2024 and did not fail; two
   small harbour bridges out-scored Carola for most of 2024 with no ground truth either way.
-- 399 Jev decisions across 21 cutoffs cost a few cents.
+- 399 decisions across 21 cutoffs with the former engine cost a few cents.
 
 ## What it does not claim
 
@@ -67,9 +67,9 @@ science.
 
 ## The hard question: would it have warned anyone in August 2024?
 
-**What the screen would have said.** At the 1 Aug 2024 cutoff Carola was rank 3 of 19 by score and
+**What the screen would have said.** At the 1 Aug 2024 cutoff Carola was rank 3 of 19 monitored (20 in the data) by score and
 rank 1 by deviation from its own history (z = 2.8). Two flags lit: differential motion along the
-deck, and outlier against its own past. Jev: pattern *differential* at full confidence, risk
+deck, and outlier against its own past. The former engine gave pattern *differential* at full confidence, risk
 *elevated* at 47%, inspect *yes* at 52%. By the 1 Sept 2024 cutoff it was rank 1 with z = 4.2,
 three flags lit, and risk *high*. The per-span chart showed the north (Neustadt-side) spans
 and the mid-river span drifting down through 2024 while the south half stayed still, which is the
@@ -93,10 +93,10 @@ explain the gap:
   renovation. A known-weak structure that starts moving more than ever is a different situation
   from a healthy one doing the same.
 
-**The fix (to implement, then re-run on all 19 bridges).**
+**The fix (to implement, then re-run on all 20 bridges, 19 monitored).**
 
 1. Escalation rule in the deterministic rubric: own-history outlier *and* differential motion
-   together produce a stated fact for Jev ("exceeds anything in this asset's record, concentrated
+   together produce a stated fact for the decision model ("exceeds anything in this asset's record, concentrated
    at one end") and map to *high*.
 2. Asset condition input: inspection grade, age, known defects from the owner's register (or OSM
    tags where present). Poor condition + the escalation rule → *immediate*.
@@ -126,7 +126,7 @@ The rubric is Impact 30 / Meta tooling 25 / Technical depth 20 / Demo 25.
 - **Impact:** strong if the latency caveat is ours. **Depth:** very strong (leak-free retrospective,
   deseasoning, span decomposition, visible false positives). **Demo:** strong if the video leads
   with the honest version. **Meta tooling:** the weak column until SAM 3.1 and the Muse Spark agent
-  are actually built; a judge will notice a Jev-and-Python pipeline with Meta models on the edges.
+  are actually built; a judge will notice a model-and-Python pipeline with Meta models on the edges.
 - **Still loses them:** an escalation rule tuned after seeing the answer and not declared; only one
   site; any sentence in the video that outruns the data.
 

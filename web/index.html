@@ -1461,5 +1461,25 @@ boot().catch((e) => {
 });
 </script>
 <script src="story.js"></script>
+<script>
+// 6 s watchdog: if a CDN or the tile host is unreachable the page would show only RADARTWIN on black.
+setTimeout(function () {
+  var libsMissing = (typeof maplibregl === "undefined") || (typeof gsap === "undefined") || (typeof THREE === "undefined");
+  var mapLoaded = false;
+  try {
+    if (typeof map !== "undefined" && map && map.loaded) mapLoaded = map.loaded();
+  } catch (e) { mapLoaded = false; }
+  if (libsMissing || !mapLoaded) {
+    var pre = document.getElementById("storyPreloader");
+    if (pre && !document.getElementById("rtWatchdogMsg")) {
+      var msg = document.createElement("div");
+      msg.id = "rtWatchdogMsg";
+      msg.setAttribute("style", "font-family:monospace;font-size:12px;color:#8ea3c7;text-align:center;margin-top:12px;");
+      msg.textContent = "Could not reach the map or script hosts. Check the connection and reload.";
+      pre.appendChild(msg);
+    }
+  }
+}, 6000);
+</script>
 </body>
 </html>

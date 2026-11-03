@@ -16,46 +16,40 @@ Read `docs/idea.md` first for what the product is and what it must not claim.
 - **Meta models (required to be central):** SAM 3.1 (segmentation), Muse Spark 1.3 (audit agent +
   memo), Muse Image (optional illustration), Muse Code (build agent). Muse Glimmer open weights on
   Baseten/Modal is a stretch.
-- **Non-Meta runtime component, declared:** TypeSafe Jev for typed risk decisions with
-  probabilities. Fallback if rules require Meta-only: Muse Spark structured output with the same
-  schema (§9).
+- **Decision model:** Muse Spark 1.3 for typed risk decisions with probabilities (§5.0),
+  checked against the deterministic rubric. No non-Meta runtime component.
 
 ## 1. Repository layout
 
 ```
 meta-radar-twin/
-  SPEC.md                      this file
-  docs/idea.md                 product description, claims and non-claims
-  pyproject.toml               uv project, Python 3.12 (3.14 lacks wheels for rasterio/geopandas)
+  README.md, SPEC.md, LICENSE  docs (this file is the build spec)
+  pyproject.toml, uv.lock       uv project, Python 3.12 (3.14 lacks wheels for rasterio/geopandas)
+  .env.example                  MODEL_API_KEY template
+  docs/                         idea, design-spec, story-spec, gotchas, history
+  muse/prompts/                 phase prompts in order (the build record)
   radartwin/
-    config.py                  Site dataclass + SITES
-    ingest/egms.py             EGMS CSV clip + load
-    ingest/imagery.py          Sentinel-2 visual + Sentinel-1 RTC chips (Planetary Computer)
-    segment/osm.py             OpenStreetMap bridge footprints (Overpass)
-    segment/sam.py             SAM 3.1 via Meta Model API
-    analytics/trends.py        velocity, acceleration, seasonal fit
-    analytics/geometry.py      deck axis, along/cross, span bins
-    analytics/decompose.py     asc+desc LOS -> vertical/east
-    analytics/bind.py          points -> polygons
-    analytics/retro.py         rolling retrospective + scoring
-    decide/rubric.py           deterministic flags + escalation
-    decide/jev.py              Jev decision schema + call
-    agents/llm.py              Muse Spark adapter
-    agents/fidelity.py         SAR backscatter guardrail
-    agents/audit.py            Muse Spark tool-calling audit agent
-    agents/sitrep.py           memo.md + hazards.geojson
-  scripts/
-    clip_egms.py  rank_city.py  jev_decisions.py  export_web.py  sam_vs_osm.py
-  web/index.html + web/data/   MapLibre page, static, Cloudflare Pages
-  data/carola/                 EGMS tiles (gitignored; already present)
-  reference/                   expected outputs from the validated prototype
+    config.py                   Site dataclass + SITES
+    ingest/                     egms (CSV clip + load), imagery (S2 visual + S1 RTC chips)
+    segment/                    osm (bridge footprints), sam (SAM 3.1 via Meta Model API)
+    analytics/                  trends, geometry, decompose, bind, retro (rolling retrospective + scoring)
+    decide/                     rubric (flags + escalation), model (Muse Spark), features, coverage
+    agents/                     llm (Muse Spark adapter), fidelity, audit, sitrep
+  scripts/                      rank_city, decisions, audit, check_memo, check_truncation,
+                                check_web_data, compare_leakfree, export_web, name_sensitivity,
+                                point_velocity, render_s1_chip, render_s2_chip, sam_smoke, sam_vs_osm
+  tests/                        test_*.js (node), test_decide_model.py, test_leakfree.py, frames.md
+  web/                          index.html, story.js, basemap.js, annotate.js, deck3d.js,
+                                explainer.js, memo.js, fui.css, story.css, data/ (shipped output)
+  reference/                    expected outputs from the validated prototype
+  data/, out/                   gitignored; absent on a clone (clips + pipeline outputs)
 ```
 
 Dependencies: numpy, pandas, geopandas, shapely, pyproj, pystac-client, planetary-computer,
-rasterio, httpx, pydantic, `pydantic-ai-slim[typesafe,openai]`, `typesafe-sdk==0.6.0` (pin;
-Pydantic AI expects 0.6.x), python-dotenv, matplotlib, openai (for the Meta API), modal (optional).
+rasterio, httpx, pydantic, `pydantic-ai-slim[openai]`, python-dotenv, matplotlib, openai
+(for the Meta API), modal (optional).
 
-Environment: `.env` with `MODEL_API_KEY` (Meta) and `TYPESAFE_API_KEY`.
+Environment: `.env` with `MODEL_API_KEY` (Meta).
 
 ## 2. Data
 
@@ -208,7 +202,7 @@ Two details that change the numbers and are therefore pinned:
   is the track's own last epoch before the cutoff.
 - When a small span is equidistant from two big spans, merge into the **lower span id**.
 
-**Validation (reference/dresden_scores.csv etc.): Carola score rank among 19 must be 1 at
+**Validation (reference/dresden_scores.csv etc.): Carola score rank among the 19 monitored (20 in the data) must be 1 at
 2023-10-01, 10 at 2024-06-01, 3 at 2024-08-01, 1 at 2024-09-01; z must be 2.47, 0.50, 2.83, 4.24
 at those cutoffs (±0.05); z rank 1 at 2024-08-01 and 2024-09-01.** Per-track long-term velocities
 on Carola (pre-collapse, raw) must match the EGMS `mean_velocity` column within 0.1 mm/yr:
@@ -221,7 +215,7 @@ truncation rule above now bans. They stay in `reference/` as the **whole-period 
 leak-free rebuild reproduces them exactly when switched to the EGMS column (proving nothing else
 changed), and its own numbers are reported beside them, never tuned toward them.
 
-### 3.6 features per asset per cutoff (what Jev sees)
+### 3.6 features per asset per cutoff (what the decision model sees)
 ```
 asset, cutoff, scatterers, tracks, spans,
 long_term_velocity_mm_yr (mean over the asset's points of the per-point long-term velocity at
@@ -232,11 +226,11 @@ city_p80_velocity_change_mm_yr, city_p80_spread_mm_yr,
 condition ("good"|"fair"|"poor"|"unknown"), condition_source,
 escalations_12m, months_since_esc, points_per_ha, bright_fraction (null without a radar chip), radar_coverage ("ok"|"low")
 ```
-Keep it small and literal; Jev reads questions literally and is weak at arithmetic.
+Keep it small and literal; the model reads questions literally and must not do arithmetic.
 
 ## 4. Deterministic rubric (decide/rubric.py)
 
-Flags (plain bools, shown to Jev as facts and printed in the memo):
+Flags (plain bools, shown to the decision model as facts and printed in the memo):
 ```
 moving        = |long_term_velocity| > 1.5            # EGMS noise floor ~1–2 mm/yr
 accelerating  = wmax    > city_p80_velocity_change     # relative to the city at the same cutoff
@@ -263,7 +257,7 @@ none      = otherwise
 cap at watch if low_quality or low_coverage
 ```
 escalations_12m is evidence for the memo, not a level raiser: "high if escalated twice in 12 months"
-kept 5–8 of 19 bridges high in most months (Pieschener Mole: a six-month episode in 2024 stayed
+kept 5–8 of the 19 monitored bridges (20 in the data) high in most months (Pieschener Mole: a six-month episode in 2024 stayed
 "high" long after it went quiet). Measured with this ladder: 1–4 high per month, median 1.
 
 **Owner condition overlay (external input, never part of the headline):**
@@ -359,7 +353,7 @@ means the key is bad; regenerate at console.typesafe.ai.
 Jev's answers vary slightly run to run; match the pattern and risk level, not the probabilities.
 With the escalation rule and `condition="poor"`, Aug/Sep 2024 should reach *immediate*.
 
-Cost: ~400 decisions (19 bridges × 21 cutoffs) cost cents.
+Cost: ~400 decisions (19 monitored bridges, 20 in the data, × 21 cutoffs) cost cents.
 
 ### Modal workspace rule
 All Modal work (deploy, run, serve, volumes, secrets) targets workspace **geo-sar** only. Never
@@ -400,7 +394,7 @@ Adapter: Pydantic AI `OpenAIChatModel("muse-spark-1.3", provider=OpenAIProvider(
 
 Audit agent tools (all deterministic, all already computed):
 `list_assets(cutoff)`, `get_asset_features(asset, cutoff)`, `get_span_series(asset)`,
-`get_decision(asset, cutoff)` (Jev result + confidences), `backscatter_fidelity(asset)` (§7),
+`get_decision(asset, cutoff)` (model result + probabilities), `backscatter_fidelity(asset)` (§7),
 `write_hazard_layer(assets)`. System prompt: narrate, never compute, never invent numbers, cite the
 feature values, include the data-quality and latency caveats. Output `memo.md` + `hazards.geojson`.
 
@@ -434,14 +428,21 @@ Any brightness test, absolute or relative to surroundings, measures radar visibi
 bridge-ness. See docs/gotchas.md.
 
 ## 8. Scripts and expected outputs
-- `scripts/clip_egms.py` — already-clipped files exist; keep for reproducibility.
 - `scripts/rank_city.py carola` — bridges, binding, rolling retrospective, scoring, ranking;
   writes `out/dresden_scores.csv`, `_z_scores.csv`, `_wmax.csv`, `_wspread.csv`, `_bridges.csv`,
   `out/dresden_ranking.png`, and a pickle of state for the next scripts. Must reproduce
-  `reference/` numbers (19 bridges, 3,700 scatterers on bridges, 61 on Carola, 98 spans in total).
-- `scripts/jev_decisions.py <cutoff>` — features + flags + Jev for every bridge at a cutoff; prints
-  the table; writes `out/jev_decisions_<cutoff>.csv` and `out/features_<cutoff>.csv`. Run at all
-  21 cutoffs 2023-01-01 … 2024-09-01.
+  `reference/` numbers (20 bridges in the data, 19 monitored, 3,700 scatterers on bridges, 61 on Carola, 98 spans in total).
+- `scripts/decisions.py <cutoff>|all [--model]` — features + flags + rubric decision at every
+  cutoff (`out/decisions_<cutoff>.csv`, `out/escalation_counts.csv`); with `--model` also the
+  Muse Spark decision side by side (`out/model_decisions_<cutoff>.csv`, agreement tables).
+  Run at all 33 cutoffs 2022-01-01 … 2024-09-01.
+- `scripts/audit.py <cutoff>` — Muse Spark audit agent: memo + hazard layer.
+- `scripts/check_memo.py`, `scripts/check_truncation.py`, `scripts/check_web_data.py` —
+  memo traceability, truncation invariance, and web/data validation (the last needs `out/`).
+- `scripts/point_velocity.py`, `scripts/render_s1_chip.py`, `scripts/render_s2_chip.py` —
+  per-point velocities and the radar/optical chips into `out/` for the exporter.
+- `scripts/compare_leakfree.py`, `scripts/name_sensitivity.py` — leak-free comparison and
+  name-sensitivity check.
 - `scripts/export_web.py` — reads `out/` only (no API calls) and writes `web/data/`:
   `bridges.geojson` (simplified polygons; id, name, n, tracks, len_m; plus the not-monitored
   bridges with `monitored: false`, scatterers, points_per_ha and reason),
@@ -460,9 +461,11 @@ bridge-ness. See docs/gotchas.md.
 - `scripts/sam_vs_osm.py` — §6.1.
 
 ## 9. Web map (web/index.html, no build step)
-MapLibre GL 4.x from unpkg (pinned exact version). Basemaps: Esri World Imagery raster tiles
-(default, desaturated, with attribution) and Esri Canvas/World_Dark_Gray_Base (keyless; CARTO's
-dark tiles now need an API key). Built in two phases.
+MapLibre GL 4.x from unpkg (pinned exact version). Basemaps: the OpenFreeMap vector style
+(default) and Esri World Imagery raster tiles (only when the Imagery option is on).
+External calls: Google Fonts, GSAP and three.js from cdnjs, MapLibre from unpkg, vector
+tiles and a style from tiles.openfreemap.org, Esri imagery only when Imagery is on.
+Built in two phases.
 
 **Phase 5a (core):** sources `bridges` (promoteId `id`, fill + line coloured by **feature-state**
 so the month slider is instant) and `spans` (circles, diverging blue→white→red over ±4 mm/yr).
@@ -478,7 +481,7 @@ watch #eab308, elevated #f97316, high #ef4444, not monitored #9ca3af. The owner 
 only in its own labelled block in the detail panel.
 
 **Phase 5b (fixes from the 5a click review):**
-- **Basemap:** the dark basemap is Esri; the footer credits Esri only.
+- **Basemap:** the dark basemap is the OpenFreeMap vector style; the footer credits OpenFreeMap (OpenStreetMap contributors) and Esri.
 - **City-zoom markers:** below zoom 15, each bridge also gets a centroid marker coloured by the same feature-state, because thin polygons vanish at city zoom.
 - **Ranking order:** sorted by model risk (high, elevated, watch, none, then not monitored), then by rank.
 - **Event badge:** worded relative to the cutoff ("Carolabrücke collapsed 10 days after this cutoff").
@@ -522,7 +525,7 @@ unless approved.
 ## 10. Event-week order (rubric-weighted)
 1. SAM 3.1 on the Dresden chip + IoU vs OSM; Muse Image 10-min test.
 2. Muse Spark audit agent → memo + hazard layer at 2024-09-01.
-3. Escalation rule + condition input; re-run Jev at the 21 cutoffs; report how many bridges escalate.
+3. Escalation rule + condition input; re-run decisions at the cutoffs; report how many bridges escalate.
 4. Second EGMS site (Genoa / Morandi; precursor contested, say so) through the unchanged pipeline.
 5. Web: SAM/fidelity layers, SAR toggle, Run-audit button; deploy.
 6. README, architecture diagram, limitations; office hours.
