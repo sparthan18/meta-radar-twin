@@ -913,6 +913,47 @@ check("planted: removed watchdog text is caught",
   indexHtml.indexOf("Could not reach the map or script hosts. Check the connection and reload.") !== -1 &&
   indexHtml.replace("Could not reach the map or script hosts. Check the connection and reload.", "").indexOf("Could not reach the map or script hosts. Check the connection and reload.") === -1);
 
+// --- phase 9b: Story II port ---
+const story2Path = path.join(ROOT, "web/story2/index.html");
+const story2Html = fs.existsSync(story2Path)
+  ? fs.readFileSync(story2Path, "utf8") : null;
+const story2HrefCount = (indexHtml.match(/href="story2\/"/g) || []).length;
+const story2Urls = [];
+if (story2Html) {
+  for (const m of story2Html.matchAll(/(?:src|href)="([^"]+)"/g)) {
+    if (/^https?:\/\//.test(m[1])) story2Urls.push(m[1]);
+  }
+  const im = story2Html.match(/<script type="importmap">[\s\S]*?<\/script>/);
+  if (im) {
+    for (const m of im[0].matchAll(/https?:\/\/[A-Za-z0-9./@_~-]+/g)) story2Urls.push(m[0]);
+  }
+}
+const story2Hosts = story2Urls.map((u) => u.match(/^https?:\/\/([A-Za-z0-9.-]+)/)[1]);
+const story2HostsPinned = story2Hosts.length > 0 && story2Hosts.every((h) =>
+  ["unpkg.com", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com"].indexOf(h) !== -1);
+function story2BareData(root) {
+  const bad = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile() && e.name.endsWith(".js")) {
+        const rest = fs.readFileSync(p, "utf8").split("../data/").join("");
+        if (rest.indexOf("data/") !== -1) bad.push(p);
+      }
+    }
+  };
+  if (fs.existsSync(root)) walk(root);
+  else bad.push(root);
+  return bad;
+}
+const story2Bare = story2BareData(path.join(ROOT, "web/story2/js"));
+check("9b story II is ported and wired (page exists, two entry links, pinned hosts, shared data paths)",
+  story2Html !== null &&
+  story2HrefCount === 2 &&
+  story2HostsPinned &&
+  story2Bare.length === 0);
+
 if (failures) {
   console.log(`test_fui: FAIL (${failures} failure(s))`);
   process.exit(1);

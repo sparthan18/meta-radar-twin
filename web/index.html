@@ -37,7 +37,7 @@ header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70
   font-family: var(--font-data); }
 #eventBadge.show { visibility: visible; }
 .basemap-toggle { display: flex; gap: 6px; }
-.basemap-toggle button, .pill-btn, #btnPlay { border: 1px solid var(--border); background: var(--card);
+.basemap-toggle button, .basemap-toggle a, .pill-btn, #btnPlay { border: 1px solid var(--border); background: var(--card);
   color: var(--text); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
 .basemap-toggle button.active { border-color: var(--accent); color: var(--accent);
   font-weight: 600; }
@@ -175,6 +175,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
   background: transparent; border: 0; }
 .deck-note { font-size: 11px; color: var(--muted); margin: 2px 0 0;
   font-family: var(--font-data); }
+.basemap-toggle a, a.fui-btn { text-decoration: none; }
 </style>
 </head>
 <body data-mode="story">
@@ -206,6 +207,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
     </div>
     <div class="basemap-toggle" role="group" aria-label="Mode">
       <button id="btnWatchStory" type="button">Watch the story</button>
+      <a id="btnWatchStory2" href="story2/">Watch the story II</a>
     </div>
   </div>
 </header>
@@ -299,6 +301,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
         <div class="story-end-actions">
           <button id="btnReplay" type="button" class="fui-btn">Replay</button>
           <button id="btnExploreEnd" type="button" class="fui-btn">Explore this month</button>
+          <a href="story2/" class="fui-btn">Watch the story II</a>
         </div>
       </div>
     </div>

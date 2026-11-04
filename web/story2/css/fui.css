@@ -1,0 +1,68 @@
+:root {
+  --bg: #070b14;
+  --bg-2: #0b1220;
+  --fg: #e6eefc;
+  --fg-dim: #8a9ab8;
+  --line: rgba(190, 210, 255, 0.28);
+  --line-strong: rgba(190, 210, 255, 0.7);
+  --accent: #ff5a3c;
+  --accent-soft: rgba(255, 90, 60, 0.35);
+  --cyan: #8fd3ff;
+  --font-display: "Rajdhani", "Inter", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --font-read: "Inter", system-ui, sans-serif;
+  --bar: 8vh;
+  --map-halo: 0 0 1px rgba(10,16,32,1), 0 0 3px rgba(10,16,32,0.95), 0 0 8px rgba(10,16,32,0.8), 0 1px 1px rgba(10,16,32,0.9); /* dark halo under any type drawn over the map */
+}
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; }
+#stage { position: relative; width: 100vw; height: 100vh; background: var(--bg); }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* film layer */
+#film { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+#film .vignette { position: absolute; inset: 0;
+  background: radial-gradient(ellipse 70% 60% at 50% 48%, rgba(7,11,20,0) 0%, rgba(7,11,20,0.18) 60%, rgba(7,11,20,0.55) 100%); }
+#film .grain { position: absolute; inset: -40px; opacity: 0.075; mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 220px 220px; }
+#film .scan { position: absolute; left: 0; right: 0; top: 58%; height: 1px;
+  background: linear-gradient(90deg, rgba(143,211,255,0) 0%, rgba(143,211,255,0.25) 50%, rgba(143,211,255,0) 100%); opacity: 0.6; }
+
+/* letterbox */
+.bar { position: absolute; left: 0; right: 0; height: var(--bar); background: var(--bg); z-index: 40; }
+.bar.top { top: 0; } .bar.bottom { bottom: 0; }
+
+/* HUD svg */
+#hud { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30;
+  font-family: var(--font-data); }
+#hud .ring { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+#hud .ring.dash { stroke-dasharray: 3 5; }
+#hud .ring.accent { stroke: var(--accent); }
+#hud .leader { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+#hud .dot { fill: var(--fg); }
+#hud .bracket { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+#hud .label { fill: var(--fg); font-size: 11px; letter-spacing: 0.14em; }
+#hud .label.dim { fill: var(--fg-dim); }
+#hud .value { fill: var(--fg); font-size: 26px; font-weight: 500; letter-spacing: 0.02em; }
+#hud .value.accent { fill: var(--accent); }
+#hud .worry { fill: var(--accent); font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: 0.08em; }
+#hud .tick { stroke: var(--line); stroke-width: 1; }
+#hud .hair { stroke: var(--line); stroke-width: 1; }
+#hud .spanlabel { fill: var(--fg-dim); font-size: 9px; letter-spacing: 0.12em; }
+
+/* furniture */
+#furniture { position: absolute; inset: 0; pointer-events: none; z-index: 35; font-family: var(--font-data); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-dim); text-shadow: var(--map-halo); }
+#furniture .fx { position: absolute; display: flex; gap: 14px; align-items: baseline; }
+#furniture .k { color: var(--fg); font-weight: 500; }
+#furniture .tl { left: 28px; top: calc(var(--bar) + 16px); }
+#furniture .tr { right: 28px; top: calc(var(--bar) + 16px); }
+#furniture .bl { left: 28px; bottom: calc(var(--bar) + 16px); align-items: center; }
+#furniture .br { right: 28px; bottom: calc(var(--bar) + 16px); }
+#furniture .scalebar { display: inline-block; width: 86px; height: 1px; background: var(--line-strong); position: relative; }
+#furniture .scalebar::before, #furniture .scalebar::after { content: ""; position: absolute; top: -3px; width: 1px; height: 7px; background: var(--line-strong); }
+#furniture .scalebar::before { left: 0; } #furniture .scalebar::after { right: 0; }
+
+/* caption */
+#caption { position: absolute; left: 0; right: 0; bottom: calc(var(--bar) + 44px); text-align: center; z-index: 36; pointer-events: none;
+  font-family: var(--font-display); font-weight: 500; font-size: 32px; letter-spacing: 0.01em; color: var(--fg);
+  text-shadow: 0 0 24px rgba(7,11,20,.85), 0 1px 2px rgba(7,11,20,.9); }

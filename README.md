@@ -132,7 +132,11 @@ The page (`web/index.html`, MapLibre GL 4.7.1 from unpkg, no build step) shows t
 
 ## How it was built
 
-Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in order, with the design contract in `docs/design-spec.md` and the story contract in `docs/story-spec.md`. `tests/frames.md` is the frame-by-frame review checklist the owner used. See `docs/history.md` for the phase-by-phase build history.
+Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in order — except Story II, see below — with the design contract in `docs/design-spec.md` and the story contract in `docs/story-spec.md`. `tests/frames.md` is the frame-by-frame review checklist the owner used. See `docs/history.md` for the phase-by-phase build history.
+
+### Story II
+
+Open it with `cd web && python3 -m http.server 8137`, then visit `/story2/`. Story II is a second, separate cinematic story beside the first one: ten chapters that open on the globe and crane down to the Carolabrücke with the collapse played on the structure, then the Sentinel-1 satellite, how radar sees, twenty bridges, three years of monthly cutoffs, the close-up, the report, the proof, Europe, and the ending. Story II was designed and built during the Hackathon in a separate working folder and is not a Muse Code build; Muse Code built its satellite chapter (chapter 2) and ported it into this repository in phase 9b.
 
 ## Data and attribution
 
@@ -140,5 +144,8 @@ Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in 
 - OpenStreetMap contributors via OpenFreeMap (ODbL) for the basemap.
 - Esri for the optional imagery.
 - Sentinel-2 (Copernicus) for the evidence chip.
+- The photograph in chapter 1 of Story II (`web/story2/img/carola-20240911.jpg`) is from Wikimedia Commons, by Scalaran, released CC0, taken 11 September 2024.
+- The globe's land and borders in Story II are Natural Earth via world-atlas.
+- The Elbe centreline in Story II is OpenStreetMap data via OpenFreeMap (ODbL).
 
 License: MIT, see LICENSE.
