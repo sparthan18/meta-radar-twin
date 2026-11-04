@@ -61,7 +61,7 @@ export function createAcquire(wide, { svg, stack, subjectFeature, subjectLngLat,
   const meta_ = meta, clockEl = clock, note1El = note1, note2El = note2;
 
   // ---- state the tweens drive
-  const S = { on: false, event: false, leadDefer: 0, brScale: 2, brOp: 0, leadT: 0, nameN: 0, nameOp: 0, breakK: 0, floatT: 0, globeOp: 0, globeSize: 240, pointOp: 0, pointSize: 0, pointXY: null, leadY: null, follow: null, travelP: 0, travelFrom: null };
+  const S = { on: false, event: false, leadDefer: 0, brScale: 1, brOp: 0, leadT: 0, nameN: 0, nameOp: 0, breakK: 0, floatT: 0, globeOp: 0, globeSize: 240, pointOp: 0, pointSize: 0, pointXY: null, leadY: null, follow: null, travelP: 0, travelFrom: null };
   const nameChars = NAME[0].length + NAME[1].length;
   let wA = 0, measured = false;
   // the two halves meet at the hinge with no visible gap: one word until the span breaks it
@@ -136,7 +136,7 @@ export function createAcquire(wide, { svg, stack, subjectFeature, subjectLngLat,
   const api = {
     show(on) { S.on = on; svg.style.display = on ? "block" : "none"; stack.style.display = on ? "block" : "none"; if (on && !raf) loop(); if (!on && raf) { cancelAnimationFrame(raf); raf = null; } },
     reset() {
-      Object.assign(S, { event: false, brScale: 2, brOp: 0, leadT: 0, nameN: 0, nameOp: 0, breakK: 0, globeOp: 0, globeSize: 240, pointOp: 0, pointSize: 0, pointXY: null, leadY: null, follow: null, travelP: 0 });
+      Object.assign(S, { event: false, brScale: 1, brOp: 0, leadT: 0, nameN: 0, nameOp: 0, breakK: 0, globeOp: 0, globeSize: 240, pointOp: 0, pointSize: 0, pointXY: null, leadY: null, follow: null, travelP: 0 });
       for (const d of [meta, head, clock, note1, note2]) setLine(d, 0); rule.style.opacity = 0; head.classList.remove("stamp"); clock.textContent = "11 SEP 2024 · 00:00";
       update();
     },
@@ -162,7 +162,7 @@ export function createAcquire(wide, { svg, stack, subjectFeature, subjectLngLat,
     // the whole layer's state at a moment, with no animation (a seek): progress values 0..1 per element
     instant({ globe = 0, bracket = 0, leader = 0, name = 0, meta = false, head: headOn = false, clock = 0, note1 = false, note2 = false, breakK = 0, event = false, exited = false, point = false } = {}) {
       S.globeOp = globe > 0 ? 1 : 0; S.globeSize = 240 - 196 * Math.min(1, globe);
-      S.brOp = bracket > 0 && !exited ? 1 : 0; S.brScale = 2 - Math.min(1, bracket);
+      S.brOp = 0; S.brScale = 1; // the structure lights instead of wearing corners; the leader's anchor stays the deck's far corner
       S.leadT = exited ? 0 : Math.min(1, leader); S.leadY = null;
       S.nameOp = name > 0 && !exited ? 1 : 0; S.nameN = Math.min(1, name);
       S.breakK = breakK; S.event = !!event; S.follow = null;

@@ -136,7 +136,7 @@ Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in 
 
 ### Story II
 
-Open it with `cd web && python3 -m http.server 8137`, then visit `/story2/`. Story II is a second, separate cinematic story beside the first one: ten chapters that open on the globe and crane down to the Carolabrücke with the collapse played on the structure, then the Sentinel-1 satellite, how radar sees, twenty bridges, three years of monthly cutoffs, the close-up, the report, the proof, Europe, and the ending. Story II was designed and built during the Hackathon in a separate working folder and is not a Muse Code build; Muse Code built its satellite chapter (chapter 2) and ported it into this repository in phase 9b.
+Open it with `cd web && python3 -m http.server 8137`, then visit `/story2/`. Story II is a second, separate cinematic story beside the first one: nine chapters that open on the globe and crane down to the Carolabrücke with the collapse played on the structure, then how radar sees, twenty bridges, three years of monthly cutoffs, the close-up, the report, the proof, Europe, and the ending. Story II was designed and built during the Hackathon in a separate working folder and is not a Muse Code build; Muse Code ported it into this repository in phase 9b.
 
 ## Data and attribution
 

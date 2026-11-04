@@ -171,9 +171,16 @@ export function bridgeOutlines(frame, collapse = 1) {
 
 // The accent as a highlight on the structure: a wide soft pass behind a thin crisp line, faint on
 // the intact outline and full on the fallen span. `opacity` is the director's blink value.
-export function bridgeAccentLayers(frame, opacity, { id = 'subject-accent', collapse = 1 } = {}) {
-  const k = clamp01(collapse);
+export function bridgeAccentLayers(frame, opacity, { id = 'subject-accent', collapse = 1, lit = 0, sweep = -1 } = {}) {
+  const k = clamp01(collapse), li = clamp01(lit);
   const { faint, strong } = bridgeOutlines(frame, k);
+  // the acquire sweep: a short bright run along both outer edges at `sweep` of the length
+  const sw = [];
+  if (sweep >= 0 && sweep <= 1) {
+    const half = STRAND_WIDTH_M / 2, west = STRANDS[0].across + half, east = STRANDS[STRANDS.length - 1].across - half, top = DECK_TOP_M + PARAPET.height + 0.3;
+    const a = sweep * LENGTH_M, P = (aa, p, z) => frame.toXYZ(aa * frame.scale, p, z);
+    for (const p of [west, east]) sw.push([P(Math.max(0, a - 22), p, top), P(Math.min(LENGTH_M, a + 22), p, top)]);
+  }
   const o = Math.max(0, Math.min(1, opacity));
   const common = {
     coordinateSystem: COORDINATE_SYSTEM.METER_OFFSETS, coordinateOrigin: frame.origin,
@@ -182,9 +189,11 @@ export function bridgeAccentLayers(frame, opacity, { id = 'subject-accent', coll
     opacity: o, visible: o > 0.01,
   };
   // the strong outline grows with the fall, so an intact bridge carries the faint edge only
-  const data = [{ path: faint, k: 0.28, w: 0 }, ...strong.map(path => ({ path, k: k, w: 1 }))];
+  // the whole-deck outline goes from a faint edge to a lit one (`lit`); the fallen span is always strong
+  const data = [{ path: faint, k: 0.28 + 0.72 * li, w: li }, ...strong.map(path => ({ path, k: k, w: 1 })), ...sw.map(path => ({ path, k: 1, w: 1.6 }))];
+  const trig = `${k.toFixed(3)}|${li.toFixed(3)}|${sweep.toFixed(3)}`;
   return [
-    new PathLayer({ ...common, id: `${id}-glow`, data, getWidth: d => d.w ? 9 : 5, getColor: d => [...RGB.accent, Math.round(70 * d.k)], updateTriggers: { getColor: k } }),
-    new PathLayer({ ...common, id: `${id}-line`, data, getWidth: d => d.w ? 2 : 1.2, getColor: d => [...RGB.accent, Math.round(235 * d.k)], updateTriggers: { getColor: k } }),
+    new PathLayer({ ...common, id: `${id}-glow`, data, getWidth: d => 5 + 4 * d.w, getColor: d => [...RGB.accent, Math.round(70 * d.k)], updateTriggers: { getColor: trig, getWidth: trig } }),
+    new PathLayer({ ...common, id: `${id}-line`, data, getWidth: d => 1.2 + 0.8 * d.w, getColor: d => [...RGB.accent, Math.round(235 * d.k)], updateTriggers: { getColor: trig, getWidth: trig } }),
   ];
 }

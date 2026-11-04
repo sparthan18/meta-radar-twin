@@ -14,7 +14,7 @@ export const FOG_RGB = rgb(FOG_HEX);
 export const TILEJSON = 'https://tiles.openfreemap.org/planet';
 export const WORLD_ATLAS = 'https://unpkg.com/world-atlas@2.0.2';
 
-export const SUBJECT_ID = '4'; // Carolabrücke in ../data/bridges.geojson
+export const SUBJECT_ID = '4'; // Carolabrücke in the bridges file
 export const SUBJECT_LNGLAT = [13.7468, 51.0535];
 
 // Shots from BRIEF.md. Captions are placeholder copy for judging type and placement only.

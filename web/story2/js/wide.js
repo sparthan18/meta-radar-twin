@@ -39,7 +39,7 @@ export async function createWide({ mapEl, globeCanvas, labelsEl, tiltCanvas, onE
   });
   map.on("error", e => pushError(e.error || e));
   let scene = "crane";
-  let ringColor = null, ringVersion = 0, subjectOpacity = 1, collapse = 1;
+  let ringColor = null, ringVersion = 0, subjectOpacity = 1, collapse = 1, lit = 0, sweep = -1;
   const accent = { o: 0 }; let accentShown = 0;
   const subjectFeat = bridges.features.find(f => String(f.properties.id) === "4");
   const axis = footprintAxis(subjectFeat);
@@ -55,7 +55,7 @@ export async function createWide({ mapEl, globeCanvas, labelsEl, tiltCanvas, onE
   // the river's current sits between the planet and the bridges, so it runs under the decks
   // the current reads at the crane's altitude and thins to a hint at the city shot, where the same points would crowd
   const riverOpacity = () => { const z = map.getZoom(); return 0.65 * Math.max(0.12, Math.min(1, (z - 12.0) / 2.6)); };
-  const makeLayers = () => { const b = baseLayers(); const out = [b[0], b[1]]; if (riverOn && river) out.push(river.layer({ t: riverT, opacity: riverOpacity() })); out.push(...b.slice(2)); out.push(...[].concat(subjectAccentLayer(bridges, accent.o, collapse))); return out; };
+  const makeLayers = () => { const b = baseLayers(); const out = [b[0], b[1]]; if (riverOn && river) out.push(river.layer({ t: riverT, opacity: riverOpacity() })); out.push(...b.slice(2)); out.push(...[].concat(subjectAccentLayer(bridges, accent.o, collapse, lit, sweep))); return out; };
   const pushAccent = () => { if (Math.abs(accent.o - accentShown) < 0.02 && !(accent.o === 0 && accentShown !== 0)) return; accentShown = accent.o; overlay.setProps({ layers: makeLayers() }); };
   let blinkTl = null;
   const overlay = new deck.MapboxOverlay({
@@ -110,6 +110,9 @@ export async function createWide({ mapEl, globeCanvas, labelsEl, tiltCanvas, onE
     // the fall of strand C: 0 intact, 1 at rest; the director plays it once in chapter 1
     setCollapse(v) { v = Math.max(0, Math.min(1, v)); if (Math.abs(v - collapse) < 0.002) return; collapse = v; invalidate(); overlay.setProps({ layers: makeLayers() }); },
     collapse() { return collapse; },
+    // the acquire glow: the deck's outline lit from 0 to 1, and a brightness sweep along it (-1 = none)
+    setLit(v) { v = Math.max(0, Math.min(1, v)); if (Math.abs(v - lit) < 0.004) return; lit = v; overlay.setProps({ layers: makeLayers() }); },
+    setSweep(v) { if (v === sweep) return; sweep = v; overlay.setProps({ layers: makeLayers() }); },
     // the Elbe's current: on in the Dresden shots, advanced by the story clock so it scrubs with the timeline
     setRiver(on) { if (!!on === riverOn) return; riverOn = !!on; overlay.setProps({ layers: makeLayers() }); },
     setRiverTime(t) { if (!riverOn || !river || t === riverT) return; riverT = t; overlay.setProps({ layers: makeLayers() }); },

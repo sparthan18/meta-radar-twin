@@ -21,8 +21,8 @@
 .clbl.major { font-size: 12px; letter-spacing: 0.34em; }
 .clbl.major.small { font-size: 10px; letter-spacing: 0.3em; }
 
-#caption span { opacity: 0; transition: opacity 0.3s ease-in; }
-#caption span.show { opacity: 1; }
+#caption > span { opacity: 0; transition: opacity 0.3s ease-in; }
+#caption > span.show { opacity: 1; }
 
 #dip { position: absolute; inset: 0; background: var(--bg); opacity: 0; pointer-events: none; z-index: 38; }
 
@@ -142,40 +142,40 @@
 .blbl.dim { color: var(--fg); font-weight: 400; } /* the unmonitored bridge: lighter weight, same contrast */
 
 /* explainer: the radar instrument */
-:is(#explainer, #explainer2) { position: absolute; inset: var(--bar) 0; z-index: 31; opacity: 0; transition: opacity 0.5s; pointer-events: none; background: var(--bg); }
-:is(#explainer, #explainer2).on { opacity: 1; }
-:is(#explainer, #explainer2) svg { width: 100%; height: 100%; font-family: var(--font-data); }
-:is(#explainer, #explainer2) .ex-grid line { stroke: rgba(190,210,255,0.07); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-orbit { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 6; }
-:is(#explainer, #explainer2) .ex-ground { fill: none; stroke: var(--line-strong); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-groundfill { fill: rgba(190,210,255,0.035); }
-:is(#explainer, #explainer2) .ex-kerb { fill: none; stroke: var(--fg); stroke-width: 2; }
-:is(#explainer, #explainer2) .ex-ret circle { fill: none; stroke: var(--cyan); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-ret circle.fill { fill: var(--cyan); stroke: none; }
-:is(#explainer, #explainer2) .ex-ret line { stroke: var(--cyan); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-look { stroke: var(--cyan); stroke-width: 1; stroke-dasharray: 3 7; }
-:is(#explainer, #explainer2) .ex-sat rect { fill: var(--fg); }
-:is(#explainer, #explainer2) .ex-sat rect.panel { fill: rgba(230,238,252,0.55); }
-:is(#explainer, #explainer2) .ex-sat line { stroke: var(--fg); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-chirp { fill: none; stroke: var(--cyan); stroke-width: 1.2; }
-:is(#explainer, #explainer2) .ex-chirp.accent { stroke: var(--accent); }
-:is(#explainer, #explainer2) .ex-echo { fill: none; stroke: var(--cyan); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-echo.accent { stroke: var(--accent); }
-:is(#explainer, #explainer2) .ex-label { font-size: 11px; letter-spacing: 0.14em; fill: var(--fg); }
-:is(#explainer, #explainer2) .ex-label.dim { fill: var(--fg-dim); }
-:is(#explainer, #explainer2) .ex-label.accent { fill: var(--accent); }
-:is(#explainer, #explainer2) .ex-bracket { fill: none; stroke: var(--line-strong); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-panelbg { fill: rgba(11,18,32,0.72); }
-:is(#explainer, #explainer2) .ex-rule { stroke: var(--line); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-wave { fill: none; stroke: var(--fg); stroke-width: 1.2; opacity: 0; }
-:is(#explainer, #explainer2) .ex-wave.accent { stroke: var(--accent); }
-:is(#explainer, #explainer2) .ex-dial { fill: none; stroke: var(--line-strong); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-tick { stroke: var(--line-strong); stroke-width: 1; }
-:is(#explainer, #explainer2) .ex-needle { stroke: var(--accent); stroke-width: 1.5; }
-:is(#explainer, #explainer2) .ex-dot { fill: var(--fg); }
-:is(#explainer, #explainer2) .ex-value { font-size: 26px; fill: var(--fg); }
-:is(#explainer, #explainer2) .ex-value.big { font-size: 48px; }
-:is(#explainer, #explainer2) .ex-value.accent { fill: var(--accent); }
+#explainer { position: absolute; inset: var(--bar) 0; z-index: 31; opacity: 0; transition: opacity 0.5s; pointer-events: none; background: var(--bg); }
+#explainer.on { opacity: 1; }
+#explainer svg { width: 100%; height: 100%; font-family: var(--font-data); }
+#explainer .ex-grid line { stroke: rgba(190,210,255,0.07); stroke-width: 1; }
+#explainer .ex-orbit { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 6; }
+#explainer .ex-ground { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+#explainer .ex-groundfill { fill: rgba(190,210,255,0.035); }
+#explainer .ex-kerb { fill: none; stroke: var(--fg); stroke-width: 2; }
+#explainer .ex-ret circle { fill: none; stroke: var(--cyan); stroke-width: 1; }
+#explainer .ex-ret circle.fill { fill: var(--cyan); stroke: none; }
+#explainer .ex-ret line { stroke: var(--cyan); stroke-width: 1; }
+#explainer .ex-look { stroke: var(--cyan); stroke-width: 1; stroke-dasharray: 3 7; }
+#explainer .ex-sat rect { fill: var(--fg); }
+#explainer .ex-sat rect.panel { fill: rgba(230,238,252,0.55); }
+#explainer .ex-sat line { stroke: var(--fg); stroke-width: 1; }
+#explainer .ex-chirp { fill: none; stroke: var(--cyan); stroke-width: 1.2; }
+#explainer .ex-chirp.accent { stroke: var(--accent); }
+#explainer .ex-echo { fill: none; stroke: var(--cyan); stroke-width: 1; }
+#explainer .ex-echo.accent { stroke: var(--accent); }
+#explainer .ex-label { font-size: 11px; letter-spacing: 0.14em; fill: var(--fg); }
+#explainer .ex-label.dim { fill: var(--fg-dim); }
+#explainer .ex-label.accent { fill: var(--accent); }
+#explainer .ex-bracket { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+#explainer .ex-panelbg { fill: rgba(11,18,32,0.72); }
+#explainer .ex-rule { stroke: var(--line); stroke-width: 1; }
+#explainer .ex-wave { fill: none; stroke: var(--fg); stroke-width: 1.2; opacity: 0; }
+#explainer .ex-wave.accent { stroke: var(--accent); }
+#explainer .ex-dial { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+#explainer .ex-tick { stroke: var(--line-strong); stroke-width: 1; }
+#explainer .ex-needle { stroke: var(--accent); stroke-width: 1.5; }
+#explainer .ex-dot { fill: var(--fg); }
+#explainer .ex-value { font-size: 26px; fill: var(--fg); }
+#explainer .ex-value.big { font-size: 48px; }
+#explainer .ex-value.accent { fill: var(--accent); }
 
 /* scrub line: in the bottom letterbox bar */
 #scrub { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bar); z-index: 45; display: flex; align-items: center; gap: 18px; padding: 0 24px; opacity: 0; pointer-events: none; transition: opacity 0.5s; font-family: var(--font-data); }
@@ -269,8 +269,21 @@
 #acqStack .nw-credit { font: 400 8.5px/1.5 var(--font-data); letter-spacing: 0.12em; color: var(--fg); margin-top: 5px; }
 /* the ticker along the bottom of the picture; the chapter index moves up out of its way */
 #news { position: absolute; inset: 0; z-index: 33; pointer-events: none; display: none; }
-#news .nw-ticker { position: absolute; left: 0; right: 0; bottom: var(--bar); height: 26px; display: flex; align-items: stretch; background: rgba(10,16,32,0.88); border-top: 1px solid rgba(190,210,255,0.5); opacity: 0; overflow: hidden; }
-#news .nw-chip { flex: 0 0 auto; padding: 0 14px; display: flex; align-items: center; background: var(--accent); color: var(--bg); font: 500 11px/1 var(--font-data); letter-spacing: 0.16em; }
-#news .nw-track { flex: 1; overflow: hidden; white-space: nowrap; padding-left: 16px; }
-#news .nw-run { display: inline-block; font: 500 11px/26px var(--font-data); letter-spacing: 0.12em; color: var(--fg); will-change: transform; }
+/* the ticker is a channel's: a red BREAKING NEWS chip, a near-black crawl bar with a red rule, bold condensed caps */
+#news .nw-ticker { position: absolute; left: 0; right: 0; bottom: var(--bar); height: 36px; display: flex; align-items: stretch; background: #0a0d14; border-top: 2px solid #e2231a; opacity: 0; overflow: hidden; transform: translateX(100%); will-change: transform; }
+#news .nw-chip { flex: 0 0 auto; padding: 0 18px 0 16px; display: flex; align-items: center; gap: 8px; background: #e2231a; color: #fff; font-family: var(--font-display); font-size: 17px; line-height: 1; letter-spacing: 0.06em; text-transform: uppercase; }
+#news .nw-chip b { font-weight: 700; }
+#news .nw-chip span { font-weight: 500; opacity: 0.92; }
+#news .nw-track { flex: 1; overflow: hidden; white-space: nowrap; padding-left: 18px; display: flex; align-items: center; }
+#news .nw-run { display: inline-block; font-family: var(--font-display); font-weight: 600; font-size: 17px; line-height: 36px; letter-spacing: 0.05em; text-transform: uppercase; color: #fff; will-change: transform; }
+#news .nw-item { padding: 0 6px; }
+#news .nw-sep { display: inline-block; width: 7px; height: 7px; margin: 0 14px 2px; background: #e2231a; transform: rotate(45deg); vertical-align: middle; }
+/* Meta's products stand out wherever they are named: a gold the palette uses for nothing else */
+#caption .meta, .glass .meta { color: #ffd166; }
+#caption .meta { text-shadow: 0 0 20px rgba(255,209,102,0.45), 0 0 24px rgba(7,11,20,.85), 0 1px 2px rgba(7,11,20,.9); }
+/* the action list blares: an accent outline pulsing like an alarm, no fill */
+#report .alarm { margin: 10px 12px 0; padding: 0 8px 4px; outline: 1px solid rgba(255,90,60,0); outline-offset: 0; border-radius: 1px; }
+#report .alarm .ps, #report .alarm .rows { padding-left: 0; padding-right: 0; }
+#report .alarm.on { animation: alarm 1.1s ease-in-out infinite; }
+@keyframes alarm { 0%, 100% { outline-color: rgba(255,90,60,0.25); box-shadow: 0 0 0 rgba(255,90,60,0); } 50% { outline-color: rgba(255,90,60,1); box-shadow: 0 0 16px rgba(255,90,60,0.35), inset 0 0 12px rgba(255,90,60,0.12); } }
 #stage.news #furniture .fx.br { bottom: calc(var(--bar) + 40px); }

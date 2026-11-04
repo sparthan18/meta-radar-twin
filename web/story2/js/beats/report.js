@@ -11,11 +11,11 @@ export function createReport(story) {
   const memo = parseMemo(story.memos[cutoff] || "");
   // panel skeleton
   panel.innerHTML = `
-    <div class="pt">INSPECTION MEMO — ${cutoff}<span class="by">MUSE SPARK 1.3 · AUDIT AGENT</span></div>
+    <div class="pt">INSPECTION MEMO — ${cutoff}<span class="by"><span class="meta">MUSE SPARK 1.3</span> · AUDIT AGENT</span></div>
     <div class="ps">VERDICT</div>
     <div class="verdict" id="memoVerdict"></div>
-    <div class="ps">ACTION LIST</div>
-    <div class="rows" id="memoRows"></div>
+    <div class="alarm" id="memoAlarm"><div class="ps">ACTION LIST</div>
+    <div class="rows" id="memoRows"></div></div>
     <div class="ps">WATCH LIST · ${memo.watch.length} BRIDGES</div>
     <div class="watch">${memo.watch.map(w => w.split(" — ")[0]).join(" · ")}</div>
     <div class="foot">${memo.disagreements} MODEL-VERSUS-CHECKLIST DISAGREEMENTS, ALL AT WATCH OR BELOW · EVERY NUMBER TRACES TO A LOGGED TOOL CALL</div>`;
@@ -41,17 +41,17 @@ export function createReport(story) {
   card.innerHTML = `
     <div class="pt">EVIDENCE — SENTINEL-2 · 10 M</div>
     <div class="chip"><img src="../data/s2_visual.png" alt=""><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path id="samPath" d="${d}"/></svg></div>
-    <div class="foot">SAM 3.1 · BOX PROMPT ON THE OSM FOOTPRINT · SCORE ${feat.properties.score.toFixed(2)} · IOU ${feat.properties.iou.toFixed(2)}</div>`;
+    <div class="foot"><span class="meta">SAM 3.1</span> · BOX PROMPT ON THE OSM FOOTPRINT · SCORE ${feat.properties.score.toFixed(2)} · IOU ${feat.properties.iou.toFixed(2)}</div>`;
   const verdictEl = $("memoVerdict");
   let typing = null;
   return {
-    show(on) { panel.classList.toggle("on", on); if (!on) { card.classList.remove("on"); verdictEl.textContent = ""; rows.classList.remove("on"); if (typing) typing.kill(); } },
+    show(on) { panel.classList.toggle("on", on); if (!on) { card.classList.remove("on"); verdictEl.textContent = ""; rows.classList.remove("on"); $("memoAlarm").classList.remove("on"); if (typing) typing.kill(); } },
     type(seconds) {
       const text = memo.verdict; const o = { n: 0 };
       verdictEl.textContent = "";
       typing = gsap.to(o, { n: text.length, duration: seconds, ease: "none", onUpdate: () => { verdictEl.textContent = text.slice(0, Math.floor(o.n)); } });
     },
-    rows() { rows.classList.add("on"); },
+    rows() { rows.classList.add("on"); $("memoAlarm").classList.add("on"); }, // the alarm outline starts with the rows
     evidence(on) { card.classList.toggle("on", on); if (on) { const p = card.querySelector("#samPath"); const L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; gsap.to(p.style, { strokeDashoffset: 0, duration: 0.9, ease: "power2.out" }); } },
     memo,
   };

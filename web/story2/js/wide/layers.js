@@ -168,8 +168,8 @@ export function sweepLayer(axis, t, { fog, widthM = 22 } = {}) {
 // The blink: the accent as an edge glow on the structure's outline, strongest along the fallen
 // span, never a fill over the roadway. Built on its own so the director can swap just these
 // layers every frame without touching the tile layer. Returns a pair of PathLayers.
-export function subjectAccentLayer(bridges, opacity, collapse = 1) {
+export function subjectAccentLayer(bridges, opacity, collapse = 1, lit = 0, sweep = -1) {
   const subject = bridges.features.find(f => f.properties.id === SUBJECT_ID && f.geometry.type === 'Polygon');
   if (!subject) return [];
-  return bridgeAccentLayers(bridgeFrame(footprintAxis(subject)), opacity, { id: 'subject-accent', collapse });
+  return bridgeAccentLayers(bridgeFrame(footprintAxis(subject)), opacity, { id: 'subject-accent', collapse, lit, sweep });
 }

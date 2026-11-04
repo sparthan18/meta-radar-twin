@@ -6,7 +6,7 @@
 //   flow.layer({ t: seconds, opacity: 1, extra: {} })  -> one deck.ScatterplotLayer for that instant
 //   flow.bounds                                        -> [[minLng, minLat], [maxLng, maxLat]] of the line
 //
-// `feature` is the parsed LineString from ../data/elbe.geojson, in downstream order; the module never
+// `feature` is the parsed LineString of the Elbe centreline file, in downstream order; the module never
 // fetches and never touches the DOM. The particle set is built once, deterministically from `seed`:
 // each particle gets a start position along the line in metres, a lateral offset across it, a
 // lifetime of 6–12 s and a phase, all fixed for good. `layer()` is a pure function of `t`, so the

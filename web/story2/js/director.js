@@ -10,7 +10,6 @@ import { createBridgeLabels } from "./beats/labels.js";
 import { createReport } from "./beats/report.js";
 import { createProof } from "./beats/proof.js";
 import { createExplainer } from "./beats/explainer.js";
-import { createExplainerIso } from "./beats/explainer_iso.js";
 import { createScrub } from "./beats/scrub.js";
 import { createCallouts } from "./beats/callout.js";
 import { createAcquire } from "./beats/acquire.js";
@@ -22,7 +21,6 @@ const DIP = 0.5;
 
 export const BEATS = [
   { id: "crane", title: "The bridge", dur: 29.3 },
-  { id: "orbit", title: "The satellite", dur: 14 },
   { id: "radar", title: "How radar sees", dur: 14 },
   { id: "twenty", title: "Twenty bridges", dur: 13.5 },
   { id: "years", title: "Three years", dur: 0 }, // computed from the month schedule
@@ -38,11 +36,6 @@ const CAP = {
     { at: 0.6, hold: 1.8, text: "11 September 2024." },
     { at: 2.6, hold: 3.8, text: "A bridge in Dresden, Germany, fell into the Elbe." },
     { at: 25.2, hold: 3.0, text: "The warning had been visible from orbit for a year." },
-  ],
-  orbit: [
-    { at: 0.5, hold: 4.0, text: "Satellites bounce radio waves off the ground every few days." },
-    { at: 4.8, hold: 4.4, text: "Compare the echoes, and a kerb that moved one millimetre shows up." },
-    { at: 9.6, hold: 4.0, text: "Europe publishes this for every bridge. RadarTwin looks every month." },
   ],
   radar: [
     { at: 0.5, hold: 4.0, text: "Satellites bounce radio waves off the ground every few days." },
@@ -94,7 +87,6 @@ export async function boot() {
   const report = createReport(story);
   const proof = createProof(story);
   const explainer = createExplainer();
-  const explainerIso = createExplainerIso();
   const callouts = createCallouts(wide, $("callouts"));
   const subjectFeature = story.bridges.features.find(f => String(f.properties.id) === "4" && f.geometry.type === "Polygon");
   const acquire = createAcquire(wide, { svg: $("acquire"), stack: $("acqStack"), subjectFeature, subjectLngLat: [13.74, 51.05] });
@@ -175,7 +167,11 @@ export async function boot() {
 
   // ---------- captions ----------
   let capTimer = null;
-  const showCaption = (text, hold) => { caption.textContent = text; caption.classList.add("show"); if (capTimer) capTimer.kill(); capTimer = gsap.delayedCall(hold, () => caption.classList.remove("show")); };
+  // Meta's products stand out in every caption
+  const META_RE = /(Muse Spark(?: Open)?(?: 1\.3)?|Muse Code|Muse Image|Muse Wonder|Muse Glimmer|SAM 3\.1|Meta Model API)/g;
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const markMeta = text => esc(text).replace(META_RE, '<span class="meta">$1</span>');
+  const showCaption = (text, hold) => { caption.innerHTML = markMeta(text); caption.classList.add("show"); if (capTimer) capTimer.kill(); capTimer = gsap.delayedCall(hold, () => caption.classList.remove("show")); };
   const clearCaption = () => { caption.classList.remove("show"); if (capTimer) capTimer.kill(); };
 
   // ---------- the shake: three frames on the picture and the layers that track it ----------
@@ -191,9 +187,9 @@ export async function boot() {
   const pose = { az: CLOSEUP_POSE.az - 4, dist: CLOSEUP_POSE.dist + 30 };
   function resetAll() {
     clearCaption();
-    wide.tilt(false); explainer.show(false); explainerIso.show(false); blabels.show(false); strip.show(false); shownMonth = -1;
+    wide.tilt(false); explainer.show(false); blabels.show(false); strip.show(false); shownMonth = -1;
     report.show(false); report.evidence(false); proof.show(false); dim.classList.remove("on"); callouts.show(false); stats.classList.remove("on"); wide.blink(false);
-    acquire.show(false); news.show(false); wide.setRiver(false);
+    acquire.show(false); news.show(false); wide.setRiver(false); wide.setLit(0); wide.setSweep(-1);
     stage.classList.remove("panel", "closeup", "intro"); ending.classList.remove("on");
   }
   function enter(id, { seek = false, local = 0 } = {}) {
@@ -205,7 +201,6 @@ export async function boot() {
         wide.setCollapse(local >= GLOBE_LEN + 11.6 ? 1 : 0); acquire.show(true); acquire.reset(); news.show(true); news.reset();
         if (local < GLOBE_LEN) { wide.hideAll(); wide.showEurope().then(() => { wide.europeSubjectOnly(true); wide.globeView(gv); }); setAlt(693, "ORBIT"); }
         else { wide.showDresden(); wide.jumpTo(seek ? CRANE_END : CITY_HIGH); setAlt(0.4, "CRANE"); wide.setRiver(true); if (local >= GLOBE_LEN + 6.4) wide.tilt(true); } break;
-      case "orbit": closeupOff(); wide.hideAll(); explainerIso.show(true); if (seek) explainerIso.seek(local, true); else explainerIso.play(); break;
       case "radar": closeupOff(); wide.hideAll(); explainer.show(true); if (seek) explainer.seek(local, true); else explainer.play(); break;
       case "twenty": closeupOff(); wide.showDresden(); wide.setScene("city"); wide.setRingColor(null); wide.setCollapse(0); wide.setRiver(true); wide.jumpTo(local >= 4 ? WIDE.city : TWENTY_CLOSE);
         if (local >= 4) { callouts.set(TWENTY_CALLOUTS, { instant: seek }); stats.classList.add("on"); } else callouts.set([{ lnglat: wide.subjectCentre, accent: true, dx: 110, dy: -80, lines: [{ cls: "big", text: "CAROLABRÜCKE" }, { cls: "dim", text: "406 M · 5 SPANS · 61 SCATTERERS · 3 TRACKS" }] }], { instant: seek }); break;
@@ -256,8 +251,11 @@ export async function boot() {
     // Reading time governs everything from here: nothing new arrives while the viewer is still reading
     // the last thing. A word of tracked type holds about 2 s, a headline with its number 2.5 s, a
     // photograph 2.8 s, a line of mono 0.35 s a word plus 0.6 s; the ticker is ambient and does not count.
-    // acquire and identify: bracket, leader, the tracked name (read it), the meta line
-    tl.call(() => acquire.bracket(), null, "craneCity+=6.0");
+    // acquire and identify: the structure lights (a sweep along the deck, then the whole outline breathing), leader, the tracked name (read it), the meta line
+    const glow = { lit: 0, sweep: 0 };
+    tl.call(() => wide.blink(true, { instant: true }), null, "craneCity+=6.0");
+    tl.to(glow, { lit: 1, duration: 0.5, ease: "expo.out", onUpdate: () => wide.setLit(glow.lit) }, "craneCity+=6.0");
+    tl.fromTo(glow, { sweep: 0 }, { sweep: 1, duration: 0.7, ease: "power1.inOut", onUpdate: () => wide.setSweep(glow.sweep), onComplete: () => wide.setSweep(-1) }, "craneCity+=6.0");
     tl.call(() => acquire.leader(), null, "craneCity+=6.8");
     tl.call(() => acquire.name(), null, "craneCity+=7.1");
     tl.call(() => acquire.meta(), null, "craneCity+=9.2");
@@ -265,9 +263,11 @@ export async function boot() {
     // a hard cut in to the event camera as the stamp lands; the fall plays large; a hard cut back for the record
     tl.call(() => { wide.tilt(false); wide.jumpTo(EVENT_CAM); setAlt(0.13, "CLOSE"); acquire.eventMode(true); acquire.stamp(); wide.blink(true, { flash: true }); }, null, "craneCity+=10.8");
     const fall = { k: 0 };
-    tl.to(fall, { k: 1, duration: 0.8, ease: "power2.in", onUpdate: () => { wide.setCollapse(fall.k); acquire.setBreak(fall.k); } }, "craneCity+=11.0");
+    tl.to(fall, { k: 1, duration: 0.8, ease: "power2.in", onUpdate: () => wide.setCollapse(fall.k) }, "craneCity+=11.0");
     tl.call(() => shake(), null, "craneCity+=11.8");
     tl.call(() => { cam.zoom = CRANE_END.zoom + 0.03; camGo(); setAlt(0.4, "CRANE"); acquire.eventMode(false); wide.tilt(true); }, null, "craneCity+=13.2");
+    const brk = { k: 0 }; // back on the wide, the name breaks with the span the viewer has just seen fall
+    tl.to(brk, { k: 1, duration: 0.6, ease: "power2.in", onUpdate: () => acquire.setBreak(brk.k) }, "craneCity+=13.3");
     // the record arrives once the stamp has been read: the photograph, then the ticker
     tl.call(() => news.photoIn(), null, "craneCity+=13.4");
     tl.call(() => news.tickerIn(tl.time()), null, "craneCity+=14.0");
@@ -278,18 +278,16 @@ export async function boot() {
     tl.call(() => news.exit(), null, "craneCity+=23.2");
     tl.call(() => acquire.exit(), null, "craneCity+=23.3");
     caps("crane", CAP.crane);
-    // 2 the satellite: a hard cut, no dip; the point that closed on the bridge travels to the satellite
-    tl.addLabel("orbit", `crane+=${len("crane")}`);
+    // 2 how radar sees: a hard cut, no dip; the point that closed on the bridge travels to the satellite
+    tl.addLabel("radar", `crane+=${len("crane")}`);
     tl.call(() => {
       const from = acquire.state.pointXY;
-      enter("orbit");
-      const sat = document.querySelector("#explainer2 .ex-sat");
+      enter("radar");
+      const sat = document.querySelector("#explainer .ex-sat");
       acquire.show(true); if (from) acquire.state.pointXY = from;
       if (sat) acquire.travel(sat).eventCallback("onComplete", () => acquire.show(false)); else acquire.show(false);
-    }, null, "orbit");
-    caps("orbit", CAP.orbit);
-    // 3 radar (the instrument version, kept)
-    cutTo("radar", `orbit+=${len("orbit")}`); caps("radar", CAP.radar);
+    }, null, "radar");
+    caps("radar", CAP.radar);
     // 3 twenty
     cutTo("twenty", `radar+=${len("radar")}`);
     const tcam = { ...TWENTY_CLOSE };
@@ -344,16 +342,17 @@ export async function boot() {
     if (inEvent) { wide.tilt(false); wide.jumpTo(EVENT_CAM); setAlt(0.13, "CLOSE"); }
     else { camGo(); if (L >= 6.4) wide.tilt(true); if (L >= 9.5) setAlt(0.4, "CRANE"); }
     const k = L < 11.0 ? 0 : L >= 11.8 ? 1 : ((L - 11.0) / 0.8) ** 2;
-    wide.setCollapse(k);
-    if (L >= 10.8) wide.blink(true, { instant: true });
+    const bk = L < 13.3 ? 0 : L >= 13.9 ? 1 : ((L - 13.3) / 0.6) ** 2;
+    wide.setCollapse(k); wide.setSweep(-1); wide.setLit(L < 6.0 ? 0 : Math.min(1, (L - 6.0) / 0.5));
+    if (L >= 6.0) wide.blink(true, { instant: true });
     acquire.instant({
       bracket: L < 6.0 ? 0 : Math.min(1, (L - 6.0) / 0.5), leader: L < 6.8 ? 0 : Math.min(1, (L - 6.8) / 0.3), name: L < 7.1 ? 0 : Math.min(1, (L - 7.1) / 0.25),
       meta: L >= 9.2, head: L >= 10.8, clock: L < 10.8 ? 0 : (L - 10.8) / 0.6 * 180, note1: L >= 16.2, note2: L >= 18.0,
-      breakK: k, event: inEvent, exited, point: L >= 24.02 && L < 24.3,
+      breakK: bk, event: inEvent, exited, point: L >= 24.02 && L < 24.3,
     });
     news.instant({ photo: L >= 13.4 && L < 23.2, tickerT0: L >= 14.0 && L < 23.2 ? state.tl.labels.craneCity + 14.0 : null });
   };
-  const unpauseInstruments = () => { explainer.pause(false); explainerIso.pause(false); };
+  const unpauseInstruments = () => { explainer.pause(false); };
 
   // ---------- transport ----------
   // seek to any second: enter the chapter at that local time, land every tween, then reconstruct what
@@ -361,7 +360,7 @@ export async function boot() {
   function seekTime(t, { hold = false } = {}) {
     if (!state.tl) start();
     const tl = state.tl; const wasPlaying = !tl.paused();
-    tl.pause(); explainer.pause(true); explainerIso.pause(true);
+    tl.pause(); explainer.pause(true);
     t = Math.max(0, Math.min(tl.duration() - 0.05, t));
     let id = BEATS[0].id;
     for (const b of BEATS) { const L = tl.labels[b.id]; if (L === undefined) continue; const from = tl.labels[`to_${b.id}`] ?? L; if (t >= from) id = b.id; }
@@ -391,7 +390,7 @@ export async function boot() {
   }
   function toggle() {
     const tl = state.tl; if (!tl) return start();
-    if (tl.paused()) { tl.play(); unpauseInstruments(); state.phase = "playing"; } else { tl.pause(); explainer.pause(true); explainerIso.pause(true); state.phase = "paused"; }
+    if (tl.paused()) { tl.play(); unpauseInstruments(); state.phase = "playing"; } else { tl.pause(); explainer.pause(true); state.phase = "paused"; }
     scrub.setPlaying(!tl.paused());
   }
   let scrubWasPlaying = false;
