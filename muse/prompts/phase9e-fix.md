@@ -1,0 +1,7 @@
+Phase 9e-fix: the brand strip's divider reads. In `web/index.html`, the `.brand` rule from phase 9e draws its bottom border as `1px solid rgba(143,184,255,0.14)`, which is too faint to see on the panel background. Change that border colour to `var(--line-strong)` (the page's strong hairline, rgba(191,214,255,0.6)). Nothing else changes in the styles or markup.
+
+docs/history.md: append one sentence to the Phase 9e entry (no new heading): "The brand strip's divider was raised from a 0.14 hairline to `--line-strong` so it reads."
+
+Verify: serve `web/` with `python3 -m http.server 8137`, load `http://localhost:8137/` in Chrome at 1920 × 900 hard-reloaded with the cache disabled, and capture a crop of the header: the line between the brand strip and the transport row is clearly visible. Report the computed `border-bottom-color` of `.brand`. All `node tests/test_*.js` pass. Finish with `git status --short`: only `web/index.html` and `docs/history.md` may change beyond the files phase 9e already left modified (README.md, docs/history.md, tests/test_fui.js, web/fui.css, web/index.html, web/story2/index.html), and the earlier phase 9e changes stay as they are.
+
+Standing rules: do not use jg/jevgrep or any tool that sends code to an external service; no spend; network only for the page's own script hosts and tiles when you open it; no installs, no commits, no git commands that change anything, no background jobs, no `&`. Call the build steps "phases". Do not mention any build tool other than Muse Code anywhere in the repository.

@@ -18,6 +18,7 @@
   --none: #3b4760;
   --sam: #5ee7ff;
   --glow: rgba(255, 59, 59, 0.35);
+  --green: #5ee7a0; /* phase 9e: the header's secondary text */
 
   /* ---- risk ladder aliases (spec tokens by use) ---- */
   --risk-none: #3b4760;

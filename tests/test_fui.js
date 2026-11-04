@@ -200,7 +200,7 @@ check("landing has four corner brackets at the frame edges",
 check("old title text stays only in Explore's header (and <title>)",
   (indexHtml.match(/RadarTwin Dresden — bridge watchlist hindcast/g) || []).length === 2 &&
   indexHtml.indexOf("<title>RadarTwin Dresden") !== -1 &&
-  indexHtml.indexOf("<h1>RadarTwin Dresden") !== -1);
+  indexHtml.indexOf('<h1 class="visually-hidden">RadarTwin Dresden') !== -1);
 check("planted: old scene-title text is caught",
   indexHtml.indexOf("RadarTwin Dresden</strong>") === -1 &&
   indexHtml.indexOf("A bridge watchlist hindcast") === -1);
@@ -966,13 +966,43 @@ check("9c headline and history strip live in the map before the caption, no 148p
   })());
 
 // --- phase 9d: transport bar, one story entry, imagery by default ---
-check("9d page opens in Explore with the transport bar, Story II only, satellite imagery",
+// Phase 9e shortens the labels: "Satellite" in the btnImagery button and
+// "Watch the documentary" for the story entry; the old story-II label is
+// gone from web/ including web/story2/.
+function webHits9d(needle) {
+  const hits = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile()) {
+        let t = "";
+        try { t = fs.readFileSync(p, "utf8"); } catch (err) { continue; }
+        if (t.indexOf(needle) !== -1) hits.push(path.relative(ROOT, p));
+      }
+    }
+  };
+  walk(path.join(ROOT, "web"));
+  return hits;
+}
+check("9d page opens in Explore with the transport bar, documentary entry only, satellite label",
   indexHtml.indexOf('<body data-mode="explore">') !== -1 &&
   indexHtml.indexOf('id="btnWatchStory"') === -1 &&
   indexHtml.indexOf('id="btnWatchStory2"') !== -1 &&
-  indexHtml.indexOf("Satellite imagery") !== -1 &&
+  /<button[^>]*id="btnImagery"[^>]*>Satellite<\/button>/.test(indexHtml) &&
+  indexHtml.indexOf("Watch the documentary") !== -1 &&
+  webHits9d("Watch the story II").length === 0 &&
   indexHtml.indexOf('id="btnPlay"') !== -1 &&
   indexHtml.indexOf('id="btnPlay"') < indexHtml.indexOf('id="slider"'));
+
+// --- phase 9e: the Explore header as an instrument bar ---
+check("9e header is an instrument bar with brand strip, ticked timeline and readout",
+  indexHtml.indexOf('id="cutoffWord"') !== -1 &&
+  indexHtml.indexOf('class="tl-years"') !== -1 &&
+  indexHtml.indexOf('class="tl-event-label"') !== -1 &&
+  indexHtml.indexOf('class="brand-cta"') !== -1 &&
+  indexHtml.indexOf('id="btnPlay"') < indexHtml.indexOf('id="slider"') &&
+  fui.indexOf("--green: #5ee7a0") !== -1);
 
 if (failures) {
   console.log(`test_fui: FAIL (${failures} failure(s))`);

@@ -25,36 +25,99 @@ body { margin: 0; background: var(--bg); color: var(--text);
 html, body { height: 100%; }
 body { display: flex; flex-direction: column; min-height: 100vh; }
 header, footer { flex: none; }
-header { padding: 3px 16px 4px; border-bottom: 1px solid var(--border);
+header { padding: 0 16px; border-bottom: 1px solid var(--border);
   background: var(--panel); }
-header h1 { margin: 0 0 2px; font-size: 16px; font-weight: 600;
-  font-family: var(--font-display); letter-spacing: 0.04em; }
-.title-row { display: flex; flex-wrap: wrap; justify-content: space-between;
-  align-items: baseline; gap: 0 12px; }
+.brand { display: flex; align-items: center; gap: 14px; min-height: 32px;
+  flex-wrap: wrap; border-bottom: 1px solid var(--line-strong); }
+.brand-mark { font: 700 16px/1 var(--font-display); letter-spacing: 0.2em;
+  color: var(--text); }
+.brand-sep { width: 1px; height: 14px; background: var(--line-strong); flex: none; }
+.brand-sub { font: 500 10.5px/1 var(--font-data); letter-spacing: 0.1em;
+  color: var(--green); }
+.brand-spacer { flex: 1; }
+.brand-cta { font: 600 11px/1 var(--font-data); letter-spacing: 0.12em;
+  text-transform: uppercase; color: #fff; background: var(--accent);
+  padding: 7px 12px 6px; border-radius: 2px; text-decoration: none;
+  box-shadow: 0 0 14px var(--glow); }
+.brand-cta::after { content: " ▸"; }
+#about summary { font: 500 10.5px/1 var(--font-data); letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--green); cursor: pointer; list-style: none; }
+#about summary::before { content: "▸ "; }
+#about[open] summary::before { content: "▾ "; }
 #about[open] { flex: 1 1 100%; }
-#about summary { font-family: var(--font-data); font-size: 12.5px;
-  color: var(--muted); cursor: pointer; white-space: nowrap; }
-header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70em; }
-.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
-.transport { display: flex; align-items: center; gap: 10px; flex: 1 1 560px; max-width: 760px; }
-.transport input[type="range"] { flex: 1 1 240px; min-width: 200px; }
-.toggles { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-left: auto; }
-#btnPlay { min-width: 64px; }
-#cutoffLabel { font-family: var(--font-data); font-variant-numeric: tabular-nums;
-  font-weight: 600; min-width: 7em; font-size: 13px; }
-#eventBadge { visibility: hidden; background: var(--accent); color: #fff; border-radius: 4px;
-  padding: 2px 8px; font-size: 12px; font-weight: 600; white-space: nowrap;
-  font-family: var(--font-data); }
-#eventBadge.show { visibility: visible; }
-.basemap-toggle { display: flex; gap: 6px; }
-.basemap-toggle button, .basemap-toggle a, .pill-btn, #btnPlay { border: 1px solid var(--border); background: var(--card);
+#about p { font-size: 13px; max-width: 70em; color: var(--muted); margin: 6px 0 8px; }
+.controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 28px;
+  padding: 8px 0 9px; }
+.transport { display: flex; align-items: center; gap: 16px; flex: 1 1 760px;
+  max-width: 980px; min-width: 0; }
+.toggles { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 0;
+  margin-left: auto; }
+#btnPlay { width: 36px; height: 36px; flex: none; position: relative; padding: 0;
+  font-size: 0; color: transparent; border: 1px solid var(--accent);
+  border-radius: 2px; background: rgba(255,59,59,0.08); cursor: pointer; }
+#btnPlay::before { content: ""; position: absolute; left: 13px; top: 10px;
+  border-style: solid; border-width: 8px 0 8px 13px;
+  border-color: transparent transparent transparent var(--accent); }
+#btnPlay[aria-pressed="true"] { background: var(--accent);
+  box-shadow: 0 0 16px var(--glow); }
+#btnPlay[aria-pressed="true"]::before { border: 0; width: 4px; height: 14px;
+  left: 12px; top: 11px; background: #fff; box-shadow: 8px 0 0 #fff; }
+#btnPlay:focus-visible { outline: 1px solid var(--line-strong); outline-offset: 3px; }
+.timeline { position: relative; flex: 1 1 320px; min-width: 240px; height: 42px; }
+#slider { -webkit-appearance: none; appearance: none; position: absolute; left: 0;
+  top: 10px; width: 100%; height: 22px; margin: 0; background: transparent;
+  cursor: pointer; }
+#slider::-webkit-slider-runnable-track, #slider::-moz-range-track { height: 22px;
+  background: linear-gradient(var(--line-strong), var(--line-strong)) 0 11px / 100% 1px no-repeat,
+    repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px calc(100% / 32)) 0 8px / 100% 7px no-repeat; }
+#slider::-webkit-slider-thumb { -webkit-appearance: none; width: 3px; height: 18px;
+  margin-top: 2px; background: var(--text); border-radius: 1px;
+  box-shadow: 0 0 8px rgba(230,238,252,0.7); }
+#slider::-moz-range-thumb { border: 0; width: 3px; height: 18px; margin-top: 2px;
+  background: var(--text); border-radius: 1px;
+  box-shadow: 0 0 8px rgba(230,238,252,0.7); }
+#slider:focus-visible { outline: 1px solid var(--line-strong); outline-offset: 4px; }
+.tl-years { position: absolute; left: 0; right: 0; top: 33px; height: 10px;
+  font: 500 9.5px/1 var(--font-data); letter-spacing: 0.08em; color: var(--text-dim); }
+.tl-years > span { position: absolute; transform: translateX(-50%); }
+.tl-years > span:first-child { transform: none; }
+.tl-event { position: absolute; right: 0; top: 12px; width: 2px; height: 8px;
+  background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.tl-event-label { position: absolute; right: 0; top: 0;
+  font: 500 9.5px/1 var(--font-data); letter-spacing: 0.08em; color: var(--text-dim);
+  white-space: nowrap; }
+.tl-event-label::before { content: "▼ "; font-size: 7px; }
+header.at-event .tl-event-label { color: var(--accent);
+  text-shadow: 0 0 8px var(--glow); }
+.readout { display: flex; flex-direction: column; line-height: 1; width: 236px;
+  flex: none; }
+#cutoffWord { font: 600 20px/1 var(--font-display); letter-spacing: 0.04em;
+  color: var(--text); }
+.readout small { margin-top: 3px; font: 500 9.5px/1 var(--font-data);
+  letter-spacing: 0.08em; color: var(--text-dim); white-space: nowrap;
+  text-transform: uppercase; }
+#eventBadge { display: none; }
+#eventBadge.show { display: inline; color: var(--accent); font-weight: 600; }
+header.at-event #cutoffSub { display: none; }
+.basemap-toggle { display: flex; align-items: center; gap: 5px; padding: 0 14px;
+  border-left: 1px solid var(--line-strong); }
+.basemap-toggle:first-child { border-left: 0; padding-left: 0; }
+.basemap-toggle:last-child { padding-right: 0; }
+.group-label { font: 500 9.5px/1 var(--font-data); letter-spacing: 0.12em;
+  color: var(--text-dim); margin-right: 5px; }
+.basemap-toggle button, .pill-btn { border: 1px solid var(--border); background: var(--card);
   color: var(--text); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
-.basemap-toggle button.active { border-color: var(--accent); color: var(--accent);
-  font-weight: 600; }
-#btnPlay[aria-pressed="true"] { border-color: var(--accent); color: var(--accent);
-  font-weight: 600; }
-#btnWatchStory2 { border-color: var(--accent); color: var(--accent);
-  font-weight: 600; }
+.basemap-toggle button { font: 500 11px/1 var(--font-data); letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-dim); background: transparent;
+  border: 1px solid var(--line); border-radius: 2px; padding: 6px 9px 5px;
+  cursor: pointer; }
+.basemap-toggle button:hover { color: var(--text); border-color: var(--line-strong); }
+.basemap-toggle button.active, .basemap-toggle button[aria-pressed="true"] {
+  color: var(--accent); border-color: var(--accent);
+  background: rgba(255,59,59,0.08); }
+.basemap-toggle button::before { content: "□ "; font-size: 7px; vertical-align: 2px; }
+.basemap-toggle button.active::before,
+.basemap-toggle button[aria-pressed="true"]::before { content: "■ "; }
 main { display: flex; flex: 1 1 auto; min-height: 0; }
 #map { flex: 1 1 60%; min-height: 0; }
 #side { flex: 0 0 400px; max-width: 44vw; border-left: 1px solid var(--border);
@@ -63,30 +126,26 @@ main { display: flex; flex: 1 1 auto; min-height: 0; }
   main { flex-direction: column; }
   #side { max-width: none; border-left: 0; border-top: 1px solid var(--border);
     max-height: none; }
-  .transport { flex: 1 1 100%; max-width: none; flex-wrap: wrap; }
+  .transport { flex: 1 1 100%; max-width: none; }
   .toggles { margin-left: 0; flex: 1 1 100%; }
-  #eventBadge { white-space: normal; }
+  .brand-sub { display: none; }
 }
 /* Phone layout (kept separate from the 900px tablet rule above). */
 @media (max-width: 700px) {
   html, body { overflow-x: hidden; }
-  header p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: none; }
-  .controls { align-items: stretch; }
-  .transport { flex: 1 1 100%; min-width: 0; flex-wrap: wrap; max-width: none; }
-  .transport input[type="range"] { flex: 1 1 150px; min-width: 0; min-height: 40px; }
-  .transport input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 28px; height: 40px; border-radius: 6px;
-    background: var(--accent); }
-  .transport input[type="range"]::-moz-range-thumb {
-    width: 28px; height: 40px; border-radius: 6px; background: var(--accent);
-    border: 1px solid var(--border); }
-  #eventBadge { flex: 0 0 100%; white-space: normal; }
+  .transport { flex-wrap: wrap; }
+  .readout { width: 100%; }
+  #btnPlay { width: 40px; height: 40px; }
+  #btnPlay::before { left: 15px; top: 12px; }
+  #btnPlay[aria-pressed="true"]::before { left: 14px; top: 13px; }
+  #slider::-webkit-slider-thumb { width: 6px; }
+  #slider::-moz-range-thumb { width: 6px; }
+  .basemap-toggle { padding: 0; border-left: 0; }
   main { flex-direction: column; min-height: 0; }
   #map { flex: 0 0 45vh; height: 45vh; min-height: 0; }
   #side { max-width: none; border-left: 0; border-top: 1px solid var(--border);
     max-height: none; overflow-y: visible; }
-  .basemap-toggle button, .pill-btn, #btnMemoClose, #btnPlay { min-height: 40px; }
+  .basemap-toggle button, .pill-btn, #btnMemoClose { min-height: 40px; }
   #ranking .rankrow { min-height: 40px; }
 }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 10px;
@@ -196,34 +255,45 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
 <body data-mode="explore">
 <a class="skip-link" href="#ranking">Skip to ranking</a>
 <header>
-  <div class="title-row">
-    <h1>RadarTwin Dresden — bridge watchlist hindcast</h1>
+  <h1 class="visually-hidden">RadarTwin Dresden — bridge watchlist hindcast</h1>
+  <div class="brand">
+    <span class="brand-mark">RADARTWIN</span><span class="brand-sep"></span>
+    <a id="btnWatchStory2" class="brand-cta" href="story2/">Watch the documentary</a><span class="brand-sep"></span>
+    <span class="brand-sub">DRESDEN · BRIDGE WATCHLIST HINDCAST · JAN 2022 – SEP 2024</span>
+    <span class="brand-spacer"></span>
     <details id="about"><summary>About this hindcast</summary><p>Monthly radar ranking of 20 Dresden bridges from EGMS ground motion, Jan 2022 – Sep 2024.
     Colour is the Muse Spark model risk at the selected month; the replay never shows later months.
     EGMS lags the present by about a year. This ranks assets for inspection; it does not predict failure.</p></details>
   </div>
   <div class="controls">
     <div class="transport">
-      <button id="btnPlay" type="button" aria-pressed="false">Play</button>
-      <label for="slider">Month</label>
-      <input id="slider" type="range" min="0" max="32" value="32" step="1">
-      <span id="cutoffLabel">2024-09-01</span>
-      <span id="eventBadge">Carolabrücke collapsed ?? days after this cutoff (11 Sep 2024)</span>
+      <button id="btnPlay" type="button" aria-pressed="false" aria-label="Play">Play</button>
+      <div class="timeline">
+        <label for="slider" class="visually-hidden">Month</label>
+        <input id="slider" type="range" min="0" max="32" value="32" step="1">
+        <div class="tl-years" aria-hidden="true"></div>
+        <i class="tl-event" aria-hidden="true"></i>
+        <span class="tl-event-label" aria-hidden="true">COLLAPSE · 11 SEP 2024</span>
+      </div>
+      <div class="readout">
+        <b id="cutoffWord">SEP 2024</b>
+        <small><span id="cutoffSub">2024-09-01 · CUTOFF 33 OF 33</span><span id="eventBadge">Collapse ?? days after this cutoff</span></small>
+        <span id="cutoffLabel" class="visually-hidden">2024-09-01</span>
+      </div>
     </div>
     <div class="toggles">
-    <div class="basemap-toggle" role="group" aria-label="Basemap">
-      <button id="btnImagery" class="active" type="button" aria-pressed="true" title="Esri World Imagery (optical)">Satellite imagery</button>
+    <div class="basemap-toggle" role="group" aria-label="Basemap"><span class="group-label">BASE</span>
+      <button id="btnImagery" class="active" type="button" aria-pressed="true" title="Esri World Imagery (optical)">Satellite</button>
       <button id="btnDark" type="button" aria-pressed="false">Dark</button>
     </div>
-    <div class="basemap-toggle" role="group" aria-label="Layers">
+    <div class="basemap-toggle" role="group" aria-label="Layers"><span class="group-label">LAYERS</span>
       <button id="btnScatter" type="button" aria-pressed="false" title="Scatterers: 3,694 EGMS points coloured by cutoff velocity">Tracked points</button>
-      <button id="btnSam" type="button" aria-pressed="false" title="SAM 3.1 bridge outlines near Carolabrücke">AI outline (SAM)</button>
-      <button id="btnRadar" type="button" aria-pressed="false" title="Sentinel-1 amplitude chip around Carolabrücke">Radar chip (Sentinel-1)</button>
-      <button id="btnMemo" type="button" aria-expanded="false" disabled title="no memo for this month">Report (memo)</button>
+      <button id="btnSam" type="button" aria-pressed="false" title="SAM 3.1 bridge outlines near Carolabrücke">SAM outline</button>
+      <button id="btnRadar" type="button" aria-pressed="false" title="Sentinel-1 amplitude chip around Carolabrücke">Radar chip S-1</button>
       <button id="btnStrip" type="button" aria-expanded="true" aria-controls="historyStrip">History</button>
     </div>
-    <div class="basemap-toggle" role="group" aria-label="Mode">
-      <a id="btnWatchStory2" href="story2/">Watch the story II</a>
+    <div class="basemap-toggle" role="group" aria-label="Report"><span class="group-label">REPORT</span>
+      <button id="btnMemo" type="button" aria-expanded="false" disabled title="no memo for this month">Memo</button>
     </div>
     </div>
   </div>
@@ -320,7 +390,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
         <div class="story-end-actions">
           <button id="btnReplay" type="button" class="fui-btn">Replay</button>
           <button id="btnExploreEnd" type="button" class="fui-btn">Explore this month</button>
-          <a href="story2/" class="fui-btn">Watch the story II</a>
+          <a href="story2/" class="fui-btn">Watch the documentary</a>
         </div>
       </div>
     </div>
@@ -371,7 +441,7 @@ const SPAN_COLORS = ["#1f77b4","#d62728","#2ca02c","#9467bd","#ff7f0e",
 let CUT = [], DEC = {}, BRIDGES = [], SPANS = {}, OWNER = {}, EVENT_DATE = "", EVENT_MONTH = "";
 let ID2NAME = {}, NAME2ID = {}, BRIDGE_PROPS = {};
 let map = null, selectedId = "4", cutoffIdx = 32;
-let EVENT_ASSET = "Carolabrücke";
+let EVENT_ASSET = "Carolabrücke"; // Kept defined (phase 9e): the badge text no longer names the asset.
 let N_BRIDGES = 0, N_MONITORED = 0, N_NOT_MONITORED = 0;
 let spanPopup = null, scatPopup = null, samPopup = null;
 let SCAT = null, SCAT_V = {}, S1_COORDS = null;
@@ -408,7 +478,7 @@ function isEventMonth(cutoff) {
 }
 function eventBadgeText(cutoff) {
   const n = daysAfter(cutoff, EVENT_DATE);
-  return `${EVENT_ASSET} collapsed ${n} days after this cutoff (${fmtEventDate(EVENT_DATE)})`;
+  return `Collapse ${n} days after this cutoff`;
 }
 const MONTHS_FULL = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
@@ -756,6 +826,7 @@ function setPlaying(on) {
     playing = true;
     btn.textContent = "Pause";
     btn.setAttribute("aria-pressed", "true");
+    btn.setAttribute("aria-label", "Pause");
     if (playTimer) { clearInterval(playTimer); playTimer = null; }
     // Explore month replay. The phase-5e collapse moment now lives in
     // story scene 9, so reaching the end just stops.
@@ -776,6 +847,7 @@ function setPlaying(on) {
     if (playTimer) { clearInterval(playTimer); playTimer = null; }
     btn.textContent = "Play";
     btn.setAttribute("aria-pressed", "false");
+    btn.setAttribute("aria-label", "Play");
   }
 }
 
@@ -1095,6 +1167,14 @@ function initMap() {
 function applyCutoff() {
   const cutoff = CUT[cutoffIdx];
   $("cutoffLabel").textContent = cutoff;
+  // Phase 9e readout: the display-face month word plus the mono sub-line.
+  try {
+    const cm = /^(\d{4})-(\d{2})-\d{2}$/.exec(cutoff || "");
+    $("cutoffWord").textContent = cm
+      ? `${MONTHS_SHORT[Number(cm[2]) - 1].toUpperCase()} ${cm[1]}`
+      : (cutoff || "");
+    $("cutoffSub").textContent = `${cutoff} · CUTOFF ${cutoffIdx + 1} OF ${CUT.length}`;
+  } catch (e) { /* the readout follows the label */ }
   try {
     const sm = document.getElementById("storyMonth");
     if (sm) sm.textContent = cutoff;
@@ -1104,11 +1184,17 @@ function applyCutoff() {
   $("slider").setAttribute("aria-valuetext", monthName(cutoff));
   updateHeadline(cutoff);
   // Event badge: only on the cutoff whose month contains the event date.
-  // The day count is computed from the dates. The badge slot is always
-  // reserved (visibility), so the slider never changes width.
+  // The day count is computed from the dates. At the event month the
+  // readout's second line swaps to the badge and the header lights the
+  // timeline's event label via .at-event; the readout has a fixed width
+  // so the timeline never changes width.
   const badge = $("eventBadge");
-  if (isEventMonth(cutoff)) badge.textContent = eventBadgeText(cutoff);
-  badge.classList.toggle("show", isEventMonth(cutoff));
+  const atEvent = isEventMonth(cutoff);
+  if (atEvent) badge.textContent = eventBadgeText(cutoff);
+  badge.classList.toggle("show", atEvent);
+  try {
+    document.querySelector("header").classList.toggle("at-event", atEvent);
+  } catch (e) { /* ignore */ }
   // Span and scatterer popups show the selected month's value; close them
   // on month change.
   if (spanPopup) { spanPopup.remove(); spanPopup = null; }
@@ -1494,6 +1580,20 @@ async function boot() {
       setPlaying(!playing);
     }
   };
+  // Phase 9e: year marks under the timeline, one per January cutoff.
+  try {
+    const yrs = document.querySelector(".tl-years");
+    if (yrs) {
+      CUT.forEach((c, i) => {
+        if (c && c.slice(5, 7) === "01") {
+          const s = document.createElement("span");
+          s.textContent = c.slice(0, 4);
+          s.style.left = `${(i / (CUT.length - 1)) * 100}%`;
+          yrs.appendChild(s);
+        }
+      });
+    }
+  } catch (e) { /* year marks are a nicety, never fatal */ }
   initMap();
   try { setBasemap("imagery"); } catch (e) { /* Dark still switches later */ }
   applyCutoff();
