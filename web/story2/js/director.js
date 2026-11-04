@@ -26,7 +26,7 @@ export const BEATS = [
   { id: "years", title: "Three years", dur: 0 }, // computed from the month schedule
   { id: "close", title: "The close-up", dur: 12 },
   { id: "report", title: "The report", dur: 15 },
-  { id: "proof", title: "The proof", dur: 10.4 },
+  { id: "proof", title: "The proof", dur: 11 },
   { id: "europe", title: "Europe", dur: 9.8 },
   { id: "end", title: "The ending", dur: 2 },
 ];
@@ -61,9 +61,9 @@ const CAP = {
     { at: 5.6, hold: 4.2, text: "SAM 3.1 found the bridge in the Sentinel-2 image." },
     { at: 10.4, hold: 3.6, text: "Every number in the memo traces to a logged tool call." },
   ],
-  proof: [
-    { at: 0.5, hold: 4.6, text: "The future was deleted and everything re-run. Nothing changed." },
-    { at: 5.6, hold: 4.4, text: "An engineering checklist and the model agree on every red bridge." },
+  proof: [ // the objection first, in a judge's words; then the test and the result, named
+    { at: 0.5, hold: 4.6, text: "This model was built after the collapse. Did it peek at what came later?" },
+    { at: 5.4, hold: 5.0, text: "No. Every month was re-run with the later months deleted. Carolabrücke still comes out first." },
   ],
   europe: [
     { at: 0.8, hold: 3.6, text: "The data flagged it first." },

@@ -219,8 +219,8 @@ check("captions carry at and hold", scenes.every((s) =>
 check("waitFor entries are known", scenes.every((s) =>
   s.waitFor.every((w) => w === "tiles" || w === "memo" || w === "fonts")));
 check("scene durations",
-  scenes.map((s) => s.duration).join(",") === "9,16,10,30,10,12,14,10,14");
-check("total story length is 125 s", totalDuration(scenes) === 125);
+  scenes.map((s) => s.duration).join(",") === "9,16,10,30,10,12,14,11,14");
+check("total story length is 126 s", totalDuration(scenes) === 126);
 check("scene-4 spans first to last",
   scenes[3].cutoff === full[0] && scenes[3].endCutoff === full[full.length - 1]);
 check("scene-4 duration is 33 x 0.7 s plus holds",
@@ -986,10 +986,10 @@ check("8c-2 scene-7 captions unchanged",
   scenes[6].captions[0].text === "Muse Spark read the numbers and wrote the inspection memo." &&
   scenes[6].captions[1].text === "SAM 3.1 found the bridge in the satellite photo." &&
   scenes[6].captions[2].text === "Built with Muse Code.");
-check("8c-2 scene-8 captions unchanged",
+check("9g scene-8 captions state the objection and answer it",
   scenes[7].captions.length === 2 &&
-  scenes[7].captions[0].text === "The future was deleted and everything re-run. Nothing changed." &&
-  scenes[7].captions[1].text === "An engineering checklist and the model agree on every red bridge.");
+  scenes[7].captions[0].text === "This model was built after the collapse. Did it peek at what came later?" &&
+  scenes[7].captions[1].text === "No. Every month was re-run with the later months deleted. Carolabrücke still comes out first.");
 check("planted: scene-7 imagery base is caught",
   scenes[6].layers.basemap !== "imagery");
 check("8c-2 proof timing is 600 ms count + 90 ms stagger",

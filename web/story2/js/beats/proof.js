@@ -9,15 +9,15 @@ export function createProof(story) {
   const p = story.proof;
   const q = Object.keys(p.quantities);
   panel.innerHTML = `
-    <div class="pt">THE PROOF — ${p.cutoff}<span class="by">LEAK-FREE RETROSPECTIVE</span></div>
+    <div class="pt">THE PROOF — ${p.cutoff}<span class="by">SCORED WITHOUT HINDSIGHT</span></div>
     <div class="cols">
-      <div class="col"><div class="ps">FULL RUN</div><div class="ro"><span class="k">SCORE</span><span class="v" id="pfS">0.00</span></div><div class="ro"><span class="k">Z</span><span class="v" id="pfZ">0.00</span></div></div>
+      <div class="col"><div class="ps">ALL DATA</div><div class="ro"><span class="k">SCORE</span><span class="v" id="pfS">0.00</span></div><div class="ro"><span class="k">Z</span><span class="v" id="pfZ">0.00</span></div></div>
       <div class="check" id="pfCheck"><svg viewBox="0 0 40 40"><path d="M8 21 L17 30 L33 12"/></svg></div>
-      <div class="col"><div class="ps">FUTURE DELETED</div><div class="ro"><span class="k">SCORE</span><span class="v" id="ptS">0.00</span></div><div class="ro"><span class="k">Z</span><span class="v" id="ptZ">0.00</span></div></div>
+      <div class="col"><div class="ps">LATER MONTHS DELETED</div><div class="ro"><span class="k">SCORE</span><span class="v" id="ptS">0.00</span></div><div class="ro"><span class="k">Z</span><span class="v" id="ptZ">0.00</span></div></div>
     </div>
-    <div class="ps">EVERY QUANTITY, EVERY MONTH</div>
+    <div class="ps">EVERY NUMBER MATCHES</div>
     <div class="qrows">${q.map(k => `<div class="qrow" data-q="${k}"><span class="qn">${Q_LABEL[k] || k.toUpperCase()}</span><span class="qd">Δ ${p.quantities[k].max_abs_diff.toFixed(1)}</span><span class="qc">✓</span></div>`).join("")}</div>
-    <div class="agree" id="pfAgree">Same high bridges in <b>${p.agreement.agree} of ${p.agreement.total}</b> months</div>`;
+    <div class="agree" id="pfAgree">Checklist and model: same high bridges, <b>${p.agreement.agree} of ${p.agreement.total}</b> months</div>`;
   return {
     show(on) { panel.classList.toggle("on", on); if (!on) { panel.querySelectorAll(".qrow").forEach(r => r.classList.remove("on")); $("pfCheck").classList.remove("on"); $("pfAgree").classList.remove("on"); } },
     play() {

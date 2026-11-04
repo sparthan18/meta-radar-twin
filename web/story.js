@@ -364,10 +364,10 @@ function buildScenes(ctx) {
       camera: { mode: "hold", dim: true },
       layers: { basemap: "dark", dim: true }, overlay: "proof",
       captions: [
-        { text: "The future was deleted and everything re-run. Nothing changed.", at: 0.5, hold: 4.5 },
-        { text: "An engineering checklist and the model agree on every red bridge.", at: 5.5, hold: 4.0 }
+        { text: "This model was built after the collapse. Did it peek at what came later?", at: 0.5, hold: 4.6 },
+        { text: "No. Every month was re-run with the later months deleted. Carolabrücke still comes out first.", at: 5.4, hold: 5.0 }
       ],
-      duration: D(10, 9.5), waitFor: [] },
+      duration: D(11, 10.5), waitFor: [] },
     { id: "ten-days-later", cutoff: last,
       camera: { mode: "pullback", zoom: STORY_CITY_ZOOM, pitch: STORY_CITY_PITCH,
         bearing: 0, center: STORY_CITY_CENTER.slice() },
@@ -2206,7 +2206,7 @@ function storyShowProof() {
     const ag = storyProof.agreement;
     const n = (ag.agree !== undefined) ? ag.agree : ag.n;
     const m = (ag.total !== undefined) ? ag.total : ag.m;
-    foot.textContent = `Same high bridges in ${n} of ${m} months`;
+    foot.textContent = `Checklist and model: same high bridges, ${n} of ${m} months`;
   } else if (foot) {
     foot.textContent = "";
   }
