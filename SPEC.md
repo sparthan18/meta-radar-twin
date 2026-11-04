@@ -422,6 +422,8 @@ bridge-ness. See docs/gotchas.md.
 - `scripts/sam_vs_osm.py` — §6.1.
 
 ## 9. Web map (web/index.html, no build step)
+
+**Status (5 Nov):** this section is the contract the page was built to through phase 8; phases 9c to 9g then changed what a visitor sees, and README.md and `docs/history.md` describe the page as it is. In short: the page opens in Explore (no landing, no story mode by default); the header is an instrument bar (a ticked month timeline with the collapse marked at its end and the month readout, in place of the slider and the event badge; the layer chips read Tracked points, SAM outline, Radar chip S-1, History, Memo; satellite imagery is the default base); the replay stops at September 2024 and restarts from January 2022 when pressed there (no ticker, no fly to the bridge); the story of phases 7 and 8 is retired from the page and the documentary at `/story2/` is the one story entry. Everything below that contradicts this is history.
 MapLibre GL 4.x from unpkg (pinned exact version). Basemaps: the OpenFreeMap vector style
 (default) and Esri World Imagery raster tiles (only when the Imagery option is on).
 External calls: Google Fonts, GSAP and three.js from cdnjs, MapLibre from unpkg, vector

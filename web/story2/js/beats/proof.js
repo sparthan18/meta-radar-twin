@@ -1,4 +1,4 @@
-// Scene 8, the proof: the full run against the run with the future deleted. Two readout columns
+// Scene 8, the proof: all the data against the run with the later months deleted. Two readout columns
 // count up and settle on identical numbers, a check draws between them, the ten quantities tick
 // through, and the agreement line lands.
 const $ = id => document.getElementById(id);

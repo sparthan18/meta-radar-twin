@@ -6,7 +6,7 @@ RadarTwin turns Europe's free Sentinel-1 ground-motion feed (EGMS) into a ranked
 
 Three honest paths from a cold clone (`data/` and `out/` are gitignored and absent until you run the pipeline).
 
-(a) Tests and the web story run from the clone with no data and no keys:
+(a) Tests and the web page run from the clone with no data and no keys:
 
 ```sh
 node tests/test_annotate.js
@@ -22,7 +22,7 @@ uv sync
 cd web && python3 -m http.server 8137   # then open http://localhost:8137/
 ```
 
-The seven `node tests/test_*.js` checks need only Node. The two Python test scripts need `uv sync` first but no data and no keys. The web story plays from the shipped `web/data/` (see (c)) over any static server; use an unused port (8765 was taken on this machine).
+The seven `node tests/test_*.js` checks need only Node. The two Python test scripts need `uv sync` first but no data and no keys. The web page and the documentary play from the shipped `web/data/` (see (c)) over any static server; use an unused port (8765 was taken on this machine).
 
 (b) The pipeline needs the EGMS Level 2a clips for the Dresden tile and the Meta Model API key. Fetch the clips from the EGMS download service; the tile ids are in `scripts/` (`scripts/rank_city.py` expects `clip_asc_044.csv`, `clip_asc_146.csv`, `clip_desc_095.csv`). Place them as `data/<site>/clip_*.csv` (for Dresden: `data/carola/clip_*.csv`). Each clip is an EGMS CSV: one row per scatterer with `pid, latitude, longitude, los_east, los_north, los_up` and the other SPEC §2.1 columns, plus one `YYYYMMDD` epoch column per pass holding LOS displacement in mm relative to the first epoch. Then, in order:
 
@@ -44,7 +44,7 @@ uv run python scripts/sam_vs_osm.py
 
 `scripts/check_web_data.py` needs `out/` and therefore runs only after a pipeline run.
 
-(c) The shipped `web/data/` is the pipeline's output as of the last run and is what the story plays. It is committed so the page works from the clone; re-running the pipeline and `export_web.py` refreshes it.
+(c) The shipped `web/data/` is the pipeline's output as of the last run and is what the page and the documentary play. It is committed so the page works from the clone; re-running the pipeline and `export_web.py` refreshes it.
 
 ## Setup
 
@@ -115,7 +115,7 @@ Validation: the pipeline reproduces an independent implementation of SPEC.md to 
 
 ## Web map (`web/`)
 
-Since phase 9e the page opens in Explore under an instrument-bar header: a brand strip with the "Watch the documentary" link, a transport with the ticked month timeline and the collapse marked at its end, and quiet layer chips grouped under BASE, LAYERS and REPORT. The first story is still in the code and plays at `/?story=1`. **Explore mode** is the dashboard, opening with satellite imagery on (the Dark option switches to the vector basemap). The first story is a nine-scene piece that plays on the page itself (camera, captions, a headline card per month, the ending), directed by `web/story.js` on a GSAP timeline, scrubbable by chapter, keyboard-operable (Space, arrows, Home/End, Escape) and captioned by default. Every scene reads only its bound month; the scene specification is `docs/story-spec.md`. The story has no placeholders: the satellite explainer (`web/explainer.js`), the report scene (the real memo typed in from its rendered form, the SAM outline drawn on the Sentinel-2 chip rendered by `scripts/render_s2_chip.py`), the proof scene from `proof.json` (written by `scripts/check_truncation.py --json`: every per-cutoff quantity identical with the future deleted, and the months where model and checklist pick the same high bridges), the Europe outro, and the bridge deck in 3D (`web/deck3d.js`, a MapLibre custom layer rendered with three.js 0.160.0: one box per span raised or lowered by the month's movement, pillars, span colours, a red glow while the bridge is high) for scenes 5–6 and for the selected bridge in Explore at zoom 14 and above, plus the close-up HUD: two thin rings and a four-line data block (name, month, rank and z, worry word) from the bound month only. The SVG side view remains the phone and fallback view.
+The page opens in Explore under an instrument-bar header: a brand strip with the "Watch the documentary" link, a transport with the ticked month timeline and the collapse marked at its end, and quiet layer chips grouped under BASE, LAYERS and REPORT. **Explore** is the dashboard, opening with satellite imagery on (the Dark option switches to the vector basemap). The selected bridge is drawn as a deck in 3D at zoom 14 and above (`web/deck3d.js`, a MapLibre custom layer rendered with three.js 0.160.0: one box per span raised or lowered by the month's movement, pillars, span colours, a red glow while the bridge is high) with the close-up HUD beside it: two thin rings and a four-line data block (name, month, rank and z, worry word) from the selected month only. The SVG side view in the detail panel remains the phone and fallback view. The proof numbers shown in the documentary come from `proof.json`, written by `scripts/check_truncation.py --json`: every per-cutoff quantity identical with the later months deleted, and the months where model and checklist pick the same high bridges; the Sentinel-2 chip with the SAM outline is rendered by `scripts/render_s2_chip.py`.
 
 Export once, then serve the static page locally:
 

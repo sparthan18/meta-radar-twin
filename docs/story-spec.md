@@ -1,5 +1,7 @@
 # RadarTwin story mode — scene specification
 
+**Status (5 Nov):** the story specified here was built in phases 7 and 8 and retired from the page in phase 9d: the page now opens in Explore, and the one story entry on it is the documentary at `web/story2/`, which has its own nine chapters. The code of this story is still in `web/story.js`. The layer labels named below were renamed in phases 9d and 9e (Tracked points, SAM outline, Radar chip S-1, Memo), and the proof scene's captions and column headings changed in phase 9g (all data / later months deleted). This file is kept as the record of what was built, not as a description of the page.
+
 The web map opens in **Story mode**: a dark city, one Play button, and a nine-scene piece that plays out on the page itself. **Explore mode** is the dashboard built in phases 5a–5e, one click away from any scene, bound to the same month. Voice is neutral ("the system", "the data"), never "we".
 
 Every scene is bound to one cutoff and reads only that cutoff's decisions, spans and memo. The director refuses to bind a scene to a cutoff later than the replay's current position. Only the camera, the overlays and the captions move; the data on screen is the month's data. This is the phase 5a rule and it is not negotiable.

@@ -1,5 +1,7 @@
 # RadarTwin design specification — cinematic FUI
 
+**Status (5 Nov):** the design contract for phases 8a to 8c, kept as built. Since then: the Explore header became an instrument bar (phase 9e), the proof panel's columns read "ALL DATA" and "LATER MONTHS DELETED" and its title line "SCORED WITHOUT HINDSIGHT" (phase 9g), the story of phases 7 and 8 is retired from the page (phase 9d) and the documentary at `web/story2/` carries the cinematic work. README.md and `docs/history.md` describe the page as it is.
+
 The web app is a film's on-screen interface: the kind of diegetic display a big-budget film shows when a character looks at a city from orbit. Everything on screen is drawn as if a system were rendering it live: hairlines, brackets, reticles, monospaced readouts, light that falls off, a little grain. Nothing looks like a web page. This spec is the visual contract for every phase from 8a on; `docs/story-spec.md` remains the content contract. Where the two conflict, the story spec wins on *what* is shown and this spec wins on *how*.
 
 Acceptance for every phase is a set of full-size frames (1920×1080 and 1280×800) sent to the owner for a verdict by eye. DOM probes confirm behaviour; they never sign off a look.
