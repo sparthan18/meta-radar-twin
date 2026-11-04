@@ -26,8 +26,8 @@ export const BEATS = [
   { id: "years", title: "Three years", dur: 0 }, // computed from the month schedule
   { id: "close", title: "The close-up", dur: 12 },
   { id: "report", title: "The report", dur: 15 },
-  { id: "proof", title: "The proof", dur: 11 },
-  { id: "europe", title: "Europe", dur: 10 },
+  { id: "proof", title: "The proof", dur: 10.4 },
+  { id: "europe", title: "Europe", dur: 9.8 },
   { id: "end", title: "The ending", dur: 2 },
 ];
 
@@ -157,7 +157,7 @@ export async function boot() {
   // ---------- month schedule for "three years" ----------
   const holds = { "2023-10-01": 2.4, "2024-08-01": 2.4 };
   const monthAt = []; let tm = 0.8;
-  story.cutoffs.forEach(c => { monthAt.push(tm); tm += 0.55 + (holds[c] || 0); });
+  story.cutoffs.forEach(c => { monthAt.push(tm); tm += 0.3 + (holds[c] || 0); }); // quiet months pass at 0.3 s; the two red months hold
   const YEARS_LEN = tm + 3.0;
   BEATS.find(b => b.id === "years").dur = YEARS_LEN;
   const monthIndexAt = (t) => { let i = 0; while (i + 1 < monthAt.length && monthAt[i + 1] <= t) i++; return t < monthAt[0] ? 0 : i; };
