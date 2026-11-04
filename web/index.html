@@ -25,7 +25,7 @@ body { margin: 0; background: var(--bg); color: var(--text);
 html, body { height: 100%; }
 body { display: flex; flex-direction: column; min-height: 100vh; }
 header, footer { flex: none; }
-header { padding: 8px 16px 10px; border-bottom: 1px solid var(--border);
+header { padding: 3px 16px 4px; border-bottom: 1px solid var(--border);
   background: var(--panel); }
 header h1 { margin: 0 0 2px; font-size: 16px; font-weight: 600;
   font-family: var(--font-display); letter-spacing: 0.04em; }
@@ -35,13 +35,15 @@ header h1 { margin: 0 0 2px; font-size: 16px; font-weight: 600;
 #about summary { font-family: var(--font-data); font-size: 12.5px;
   color: var(--muted); cursor: pointer; white-space: nowrap; }
 header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70em; }
-.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
-.slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; }
-.slider-wrap input[type="range"] { flex: 1; min-width: 160px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.transport { display: flex; align-items: center; gap: 10px; flex: 1 1 560px; max-width: 760px; }
+.transport input[type="range"] { flex: 1 1 240px; min-width: 200px; }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-left: auto; }
+#btnPlay { min-width: 64px; }
 #cutoffLabel { font-family: var(--font-data); font-variant-numeric: tabular-nums;
   font-weight: 600; min-width: 7em; font-size: 13px; }
 #eventBadge { visibility: hidden; background: var(--accent); color: #fff; border-radius: 4px;
-  padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  padding: 2px 8px; font-size: 12px; font-weight: 600; white-space: nowrap;
   font-family: var(--font-data); }
 #eventBadge.show { visibility: visible; }
 .basemap-toggle { display: flex; gap: 6px; }
@@ -51,6 +53,8 @@ header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70
   font-weight: 600; }
 #btnPlay[aria-pressed="true"] { border-color: var(--accent); color: var(--accent);
   font-weight: 600; }
+#btnWatchStory2 { border-color: var(--accent); color: var(--accent);
+  font-weight: 600; }
 main { display: flex; flex: 1 1 auto; min-height: 0; }
 #map { flex: 1 1 60%; min-height: 0; }
 #side { flex: 0 0 400px; max-width: 44vw; border-left: 1px solid var(--border);
@@ -59,6 +63,9 @@ main { display: flex; flex: 1 1 auto; min-height: 0; }
   main { flex-direction: column; }
   #side { max-width: none; border-left: 0; border-top: 1px solid var(--border);
     max-height: none; }
+  .transport { flex: 1 1 100%; max-width: none; flex-wrap: wrap; }
+  .toggles { margin-left: 0; flex: 1 1 100%; }
+  #eventBadge { white-space: normal; }
 }
 /* Phone layout (kept separate from the 900px tablet rule above). */
 @media (max-width: 700px) {
@@ -66,12 +73,12 @@ main { display: flex; flex: 1 1 auto; min-height: 0; }
   header p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     max-width: none; }
   .controls { align-items: stretch; }
-  .slider-wrap { flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
-  .slider-wrap input[type="range"] { flex: 1 1 150px; min-width: 0; min-height: 40px; }
-  .slider-wrap input[type="range"]::-webkit-slider-thumb {
+  .transport { flex: 1 1 100%; min-width: 0; flex-wrap: wrap; max-width: none; }
+  .transport input[type="range"] { flex: 1 1 150px; min-width: 0; min-height: 40px; }
+  .transport input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none; width: 28px; height: 40px; border-radius: 6px;
     background: var(--accent); }
-  .slider-wrap input[type="range"]::-moz-range-thumb {
+  .transport input[type="range"]::-moz-range-thumb {
     width: 28px; height: 40px; border-radius: 6px; background: var(--accent);
     border: 1px solid var(--border); }
   #eventBadge { flex: 0 0 100%; white-space: normal; }
@@ -186,7 +193,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
 .basemap-toggle a, a.fui-btn { text-decoration: none; }
 </style>
 </head>
-<body data-mode="story">
+<body data-mode="explore">
 <a class="skip-link" href="#ranking">Skip to ranking</a>
 <header>
   <div class="title-row">
@@ -196,27 +203,28 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
     EGMS lags the present by about a year. This ranks assets for inspection; it does not predict failure.</p></details>
   </div>
   <div class="controls">
-    <div class="slider-wrap">
+    <div class="transport">
+      <button id="btnPlay" type="button" aria-pressed="false">Play</button>
       <label for="slider">Month</label>
       <input id="slider" type="range" min="0" max="32" value="32" step="1">
       <span id="cutoffLabel">2024-09-01</span>
       <span id="eventBadge">Carolabrücke collapsed ?? days after this cutoff (11 Sep 2024)</span>
-      <button id="btnPlay" type="button" aria-pressed="false">Play</button>
     </div>
+    <div class="toggles">
     <div class="basemap-toggle" role="group" aria-label="Basemap">
-      <button id="btnImagery" type="button" aria-pressed="false">Imagery</button>
-      <button id="btnDark" class="active" type="button" aria-pressed="true">Dark</button>
+      <button id="btnImagery" class="active" type="button" aria-pressed="true" title="Esri World Imagery (optical)">Satellite imagery</button>
+      <button id="btnDark" type="button" aria-pressed="false">Dark</button>
     </div>
     <div class="basemap-toggle" role="group" aria-label="Layers">
       <button id="btnScatter" type="button" aria-pressed="false" title="Scatterers: 3,694 EGMS points coloured by cutoff velocity">Tracked points</button>
       <button id="btnSam" type="button" aria-pressed="false" title="SAM 3.1 bridge outlines near Carolabrücke">AI outline (SAM)</button>
-      <button id="btnRadar" type="button" aria-pressed="false" title="Sentinel-1 amplitude chip around Carolabrücke">Satellite view (radar)</button>
+      <button id="btnRadar" type="button" aria-pressed="false" title="Sentinel-1 amplitude chip around Carolabrücke">Radar chip (Sentinel-1)</button>
       <button id="btnMemo" type="button" aria-expanded="false" disabled title="no memo for this month">Report (memo)</button>
       <button id="btnStrip" type="button" aria-expanded="true" aria-controls="historyStrip">History</button>
     </div>
     <div class="basemap-toggle" role="group" aria-label="Mode">
-      <button id="btnWatchStory" type="button">Watch the story</button>
       <a id="btnWatchStory2" href="story2/">Watch the story II</a>
+    </div>
     </div>
   </div>
 </header>
@@ -741,10 +749,9 @@ function setPlaying(on) {
   const btn = $("btnPlay");
   if (on) {
     if (cutoffIdx >= CUT.length - 1) {
-      playing = false;
-      btn.textContent = "Play";
-      btn.setAttribute("aria-pressed", "false");
-      return;
+      cutoffIdx = 0;
+      $("slider").value = String(cutoffIdx);
+      applyCutoff();
     }
     playing = true;
     btn.textContent = "Pause";
@@ -783,11 +790,15 @@ function riskOf(cutoff, bid) {
 }
 
 function initMap() {
-  let basemapPref = "dark";
+  // Phase 9d: Explore opens on satellite imagery so the first paint is
+  // imagery; the first story (?story=1) opens on the dark base its scenes
+  // set. setBasemap still persists clicks; the next load opens on imagery.
+  let basemapPref = "imagery";
   try {
-    const s = localStorage.getItem("radartwin-basemap");
-    if (s === "imagery" || s === "dark") basemapPref = s;
-  } catch (e) {}
+    if (new URLSearchParams(location.search).get("story") === "1") {
+      basemapPref = "dark";
+    }
+  } catch (e) { basemapPref = "imagery"; }
   try {
     const dark = basemapPref !== "imagery";
     $("btnImagery").classList.toggle("active", !dark);
@@ -1484,15 +1495,31 @@ async function boot() {
     }
   };
   initMap();
+  try { setBasemap("imagery"); } catch (e) { /* Dark still switches later */ }
   applyCutoff();
-  window.dispatchEvent(new Event("radartwin:ready"));
-  if (!window.__storyReady) {
-    // Story unavailable (story.js or the GSAP CDN failed): the dashboard
-    // still works, so fall back to Explore.
-    document.body.dataset.mode = "explore";
-    const landing = document.getElementById("storyLanding");
-    if (landing) landing.setAttribute("hidden", "");
-    applyCutoff();
+  // Phase 9d: the page opens in Explore for every load; the first story
+  // initialises only for ?story=1, otherwise its scene-1 dark basemap and
+  // landing camera would stage over Explore. setBasemap toggles esri-layer
+  // only if the layer exists, and the layer ships in the initial style (not
+  // added in map.on("load")), so the boot call above suffices.
+  let wantStory = false;
+  try {
+    wantStory = new URLSearchParams(location.search).get("story") === "1";
+  } catch (e) { wantStory = false; }
+  if (wantStory) {
+    try { setBasemap("dark"); } catch (e) { /* story scenes set it anyway */ }
+    window.dispatchEvent(new Event("radartwin:ready"));
+  }
+  document.body.dataset.mode = "explore";
+  const landing = document.getElementById("storyLanding");
+  if (landing) landing.setAttribute("hidden", "");
+  if (!wantStory) {
+    const pre = document.getElementById("storyPreloader");
+    if (pre) pre.setAttribute("hidden", "");
+  }
+  applyCutoff();
+  if (wantStory && window.__storyReady && typeof storyWatch === "function") {
+    try { storyWatch(); } catch (e) { /* stay in Explore */ }
   }
 }
 boot().catch((e) => {

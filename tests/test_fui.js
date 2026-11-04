@@ -965,6 +965,15 @@ check("9c headline and history strip live in the map before the caption, no 148p
       indexHtml.indexOf("calc(100vh - 148px)") === -1;
   })());
 
+// --- phase 9d: transport bar, one story entry, imagery by default ---
+check("9d page opens in Explore with the transport bar, Story II only, satellite imagery",
+  indexHtml.indexOf('<body data-mode="explore">') !== -1 &&
+  indexHtml.indexOf('id="btnWatchStory"') === -1 &&
+  indexHtml.indexOf('id="btnWatchStory2"') !== -1 &&
+  indexHtml.indexOf("Satellite imagery") !== -1 &&
+  indexHtml.indexOf('id="btnPlay"') !== -1 &&
+  indexHtml.indexOf('id="btnPlay"') < indexHtml.indexOf('id="slider"'));
+
 if (failures) {
   console.log(`test_fui: FAIL (${failures} failure(s))`);
   process.exit(1);

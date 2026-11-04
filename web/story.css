@@ -10,7 +10,7 @@ body[data-mode="story"] .maplibregl-control-container { display: none; }
 body[data-mode="explore"] #storyBar { display: none; }
 body[data-mode="story"] #btnMemo { display: none; } /* its panel lives in the hidden side */
 body[data-mode="story"] #btnStrip { display: none; } /* the strip toggle lives in the hidden header */
-body[data-mode="story"] #btnWatchStory, body[data-mode="story"] #btnWatchStory2 { display: none; }
+body[data-mode="story"] #btnWatchStory2 { display: none; }
 body[data-mode="story"] #historyStrip[hidden],
 body[data-mode="explore"] #historyStrip[hidden] { display: none; }
 body[data-mode="explore"] #sceneIndex { display: none; }
@@ -908,6 +908,7 @@ body.story-reduced #scanline { display: none; }
   pointer-events: none; /* nothing new to focus */
 }
 #deckHud[hidden] { display: none; }
+body[data-mode="explore"] #deckHud { left: auto; right: 52px; }
 #deckHud .hud-name {
   font-family: var(--font-display);
   font-size: 22px; font-weight: 600; line-height: 1.1;
@@ -967,7 +968,7 @@ body.story-reduced .annotate-line { transition: none; }
   #scrubWrap { min-width: 0; }
   .chapter { width: 18px; margin-left: -9px; }
   #btnCC, #btnExploreStory { min-height: 40px; }
-  #btnWatchStory, #btnWatchStory2 { min-height: 40px; }
+  #btnWatchStory2 { min-height: 40px; }
   body[data-mode="story"] #headline {
     left: 8px; right: 8px; width: auto;
   }
