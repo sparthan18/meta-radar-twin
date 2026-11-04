@@ -110,7 +110,6 @@ Status: model decisions exist for all 33 cutoffs (2022-01-01 to 2024-09-01). See
 | `audit_<cutoff>_tools.json` | Logged tool calls/results behind a memo |
 | `hazards_<cutoff>.geojson` | Bridge polygons with features, flags and decision as properties |
 
-`reference/jev_decisions_*.csv` are an earlier engine's results kept for comparison.
 
 Validation: the pipeline reproduces an independent implementation of SPEC.md to < 0.05 mm/yr (max |score difference| over every bridge and cutoff versus `reference/dresden_scores.csv`).
 
@@ -132,11 +131,11 @@ The page (`web/index.html`, MapLibre GL 4.7.1 from unpkg, no build step) shows t
 
 ## How it was built
 
-Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in order — except Story II, see below — with the design contract in `docs/design-spec.md` and the story contract in `docs/story-spec.md`. `tests/frames.md` is the frame-by-frame review checklist the owner used. See `docs/history.md` for the phase-by-phase build history.
+Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in order — except the documentary, see below — with the design contract in `docs/design-spec.md` and the story contract in `docs/story-spec.md`. `tests/frames.md` is the frame-by-frame review checklist the owner used. See `docs/history.md` for the phase-by-phase build history.
 
-### Story II
+### The documentary (`web/story2/`)
 
-Open it with `cd web && python3 -m http.server 8137`, then visit `/story2/`. The page's button for it reads "Watch the documentary". Story II is a second, separate cinematic story beside the first one: nine chapters that open on the globe and crane down to the Carolabrücke with the collapse played on the structure, then how radar sees, twenty bridges, three years of monthly cutoffs, the close-up, the report, the proof, Europe, and the ending. Story II was designed and built during the Hackathon in a separate working folder and is not a Muse Code build; Muse Code ported it into this repository in phase 9b.
+Press "Watch the documentary" on the page, or open `/story2/` directly after `cd web && python3 -m http.server 8137`. Nine chapters, two minutes: the globe and the crane down to the Carolabrücke with the collapse played on the structure, how radar sees, twenty bridges, three years of monthly cutoffs, the close-up, the report, the proof, Europe, and the ending. Every number in it comes from the same files as the page. The documentary was designed and built during the Hackathon in a separate working folder and is not a Muse Code build; Muse Code ported it into this repository in phase 9b.
 
 ## Data and attribution
 
@@ -144,8 +143,8 @@ Open it with `cd web && python3 -m http.server 8137`, then visit `/story2/`. The
 - OpenStreetMap contributors via OpenFreeMap (ODbL) for the basemap.
 - Esri for the optional imagery.
 - Sentinel-2 (Copernicus) for the evidence chip.
-- The photograph in chapter 1 of Story II (`web/story2/img/carola-20240911.jpg`) is from Wikimedia Commons, by Scalaran, released CC0, taken 11 September 2024.
-- The globe's land and borders in Story II are Natural Earth via world-atlas.
-- The Elbe centreline in Story II is OpenStreetMap data via OpenFreeMap (ODbL).
+- The photograph in chapter 1 of the documentary (`web/story2/img/carola-20240911.jpg`) is from Wikimedia Commons, by Scalaran, released CC0, taken 11 September 2024.
+- The globe's land and borders in the documentary are Natural Earth via world-atlas.
+- The Elbe centreline in the documentary is OpenStreetMap data via OpenFreeMap (ODbL).
 
 License: MIT, see LICENSE.

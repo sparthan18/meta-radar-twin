@@ -274,7 +274,7 @@ on most, it is useless.
 
 ## 5. Decision model
 
-**Status (Oct 28):** TypeSafe Jev is dropped. Decisions come from **Muse Spark 1.3** (`muse-spark-1.3`,
+**Status (Oct 28):** an earlier decision engine was dropped on 28 October. Decisions come from **Muse Spark 1.3** (`muse-spark-1.3`,
 Meta Model API) with probabilities, behind the same schema as the rubric (`pattern`, `risk_level`,
 `needs_inspection`). The deterministic rubric (§4) stays as an independent check, and the two are
 compared at every cutoff. Muse Glimmer (open weights, vLLM on Modal, geo-sar only) is a later
@@ -315,45 +315,6 @@ risk:     none "Routine monitoring only."
           high "Schedule a field inspection within the quarter."
 inspect:  yes / no "Should a field inspection be scheduled within the next quarter?"
 ```
-
-### 5.1 Former: Jev via Pydantic AI, model `typesafe:jev-latest`
-
-Docstrings ARE the questions. Integer rubrics are **not** supported by this SDK version; use enums.
-```python
-class MotionPattern(str, Enum):
-    STABLE = "stable"                      """No meaningful motion. Velocities within the noise floor."""
-    UNIFORM_SETTLEMENT = "uniform_settlement"  """The whole asset moves together at a steady rate. Low strain."""
-    DIFFERENTIAL = "differential"          """Parts of the asset move at clearly different rates. Induces strain."""
-    ACCELERATING = "accelerating"          """Motion is speeding up in the most recent year compared with the long-term trend."""
-    UNRELIABLE = "unreliable"              """Too few points or residuals too high to judge."""
-
-class RiskLevel(str, Enum):
-    NONE = "none"            """No engineering attention needed. Routine monitoring only."""
-    WATCH = "watch"          """Keep on the watchlist and re-evaluate at the next data update."""
-    ELEVATED = "elevated"    """Schedule a targeted review of the flagged spans within the year."""
-    HIGH = "high"            """Schedule a field inspection within the quarter."""
-    IMMEDIATE = "immediate"  """Inspect now and consider load or traffic restrictions."""
-
-class AssetDecision(BaseModel):
-    """Classify the structural motion state of one infrastructure asset from pre-computed InSAR
-    trend features and deterministic flags. Motion values are in mm per year."""
-    pattern: MotionPattern          """Which motion pattern best describes this asset?"""
-    risk_level: RiskLevel           """How urgent is engineering attention for this asset?"""
-    needs_inspection: bool          """Should a field inspection be scheduled for this asset within the next quarter?"""
-```
-Call: `Agent("typesafe:jev-latest", output_type=AssetDecision).run_sync(json.dumps({"asset_features": f, "deterministic_flags": flags}))`.
-Per-field confidence: `result.response.provider_details["confidence"]`.
-Auth: `TYPESAFE_API_KEY`, SDK sends `Authorization: Bearer` to `https://api.typesafe.ai`. A 401
-means the key is bad; regenerate at console.typesafe.ai.
-
-**Reference (independent implementation, before the escalation rule), see `reference/jev_decisions_*.csv`:**
-- 2023-10-01: Carola rank 1, flags A D O → differential (p 0.54), **high** (0.39), inspect yes (0.70).
-- 2024-08-01: rank 3, flags D O → differential (1.00), elevated (0.47), inspect yes (0.52).
-- 2024-09-01: rank 1, flags A D O → differential (0.61), **high** (0.49), inspect yes (0.74).
-Jev's answers vary slightly run to run; match the pattern and risk level, not the probabilities.
-With the escalation rule and `condition="poor"`, Aug/Sep 2024 should reach *immediate*.
-
-Cost: ~400 decisions (19 monitored bridges, 20 in the data, × 21 cutoffs) cost cents.
 
 ### Modal workspace rule
 All Modal work (deploy, run, serve, volumes, secrets) targets workspace **geo-sar** only. Never
@@ -540,7 +501,5 @@ Full list with fixes and workarounds: docs/gotchas.md.
   flip the "recent velocity").
 - Refit the seasonal model inside each rolling cutoff; fitting once on all pre-collapse data leaks.
 - Small spans (1–2 scatterers) dominate an unweighted max; shrink by n_eff and merge < 3-point spans.
-- Jev rejects `int` fields → enums; Jev is sent only the compact feature dict + flags.
-- TypeSafe 401 = bad key (SDK uses Bearer); regenerate.
 - Local static server: use an unused port (8765 was taken on this machine).
 - Synthetic-data sign bug: don't multiply an already-signed acceleration by sign(vel).
