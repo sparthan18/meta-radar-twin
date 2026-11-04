@@ -22,10 +22,18 @@
 .skip-link:focus { left: 8px; top: 8px; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font-family: var(--font-reading); font-size: 14px; }
-header { padding: 12px 16px; border-bottom: 1px solid var(--border);
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; min-height: 100vh; }
+header, footer { flex: none; }
+header { padding: 8px 16px 10px; border-bottom: 1px solid var(--border);
   background: var(--panel); }
-header h1 { margin: 0 0 2px; font-size: 19px; font-weight: 600;
+header h1 { margin: 0 0 2px; font-size: 16px; font-weight: 600;
   font-family: var(--font-display); letter-spacing: 0.04em; }
+.title-row { display: flex; flex-wrap: wrap; justify-content: space-between;
+  align-items: baseline; gap: 0 12px; }
+#about[open] { flex: 1 1 100%; }
+#about summary { font-family: var(--font-data); font-size: 12.5px;
+  color: var(--muted); cursor: pointer; white-space: nowrap; }
 header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70em; }
 .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
 .slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; }
@@ -43,10 +51,10 @@ header p { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 70
   font-weight: 600; }
 #btnPlay[aria-pressed="true"] { border-color: var(--accent); color: var(--accent);
   font-weight: 600; }
-main { display: flex; min-height: calc(100vh - 148px); }
-#map { flex: 1 1 60%; min-height: 420px; }
+main { display: flex; flex: 1 1 auto; min-height: 0; }
+#map { flex: 1 1 60%; min-height: 0; }
 #side { flex: 0 0 400px; max-width: 44vw; border-left: 1px solid var(--border);
-  background: var(--panel); padding: 12px; overflow-y: auto; max-height: calc(100vh - 148px); }
+  background: var(--panel); padding: 12px; overflow-y: auto; max-height: none; min-height: 0; }
 @media (max-width: 900px) {
   main { flex-direction: column; }
   #side { max-width: none; border-left: 0; border-top: 1px solid var(--border);
@@ -181,10 +189,12 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
 <body data-mode="story">
 <a class="skip-link" href="#ranking">Skip to ranking</a>
 <header>
-  <h1>RadarTwin Dresden — bridge watchlist hindcast</h1>
-  <p>Monthly radar ranking of 20 Dresden bridges from EGMS ground motion, Jan 2022 – Sep 2024.
-  Colour is the Muse Spark model risk at the selected month; the replay never shows later months.
-  EGMS lags the present by about a year. This ranks assets for inspection; it does not predict failure.</p>
+  <div class="title-row">
+    <h1>RadarTwin Dresden — bridge watchlist hindcast</h1>
+    <details id="about"><summary>About this hindcast</summary><p>Monthly radar ranking of 20 Dresden bridges from EGMS ground motion, Jan 2022 – Sep 2024.
+    Colour is the Muse Spark model risk at the selected month; the replay never shows later months.
+    EGMS lags the present by about a year. This ranks assets for inspection; it does not predict failure.</p></details>
+  </div>
   <div class="controls">
     <div class="slider-wrap">
       <label for="slider">Month</label>
@@ -193,8 +203,6 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
       <span id="eventBadge">Carolabrücke collapsed ?? days after this cutoff (11 Sep 2024)</span>
       <button id="btnPlay" type="button" aria-pressed="false">Play</button>
     </div>
-    <div id="headline" class="fui-panel" aria-live="polite"></div>
-    <div id="historyStrip" hidden aria-label="History strip: risk per bridge per month"></div>
     <div class="basemap-toggle" role="group" aria-label="Basemap">
       <button id="btnImagery" type="button" aria-pressed="false">Imagery</button>
       <button id="btnDark" class="active" type="button" aria-pressed="true">Dark</button>
@@ -204,6 +212,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
       <button id="btnSam" type="button" aria-pressed="false" title="SAM 3.1 bridge outlines near Carolabrücke">AI outline (SAM)</button>
       <button id="btnRadar" type="button" aria-pressed="false" title="Sentinel-1 amplitude chip around Carolabrücke">Satellite view (radar)</button>
       <button id="btnMemo" type="button" aria-expanded="false" disabled title="no memo for this month">Report (memo)</button>
+      <button id="btnStrip" type="button" aria-expanded="true" aria-controls="historyStrip">History</button>
     </div>
     <div class="basemap-toggle" role="group" aria-label="Mode">
       <button id="btnWatchStory" type="button">Watch the story</button>
@@ -283,6 +292,8 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
       <div id="sceneEvidenceFoot">SAM 3.1 · score — · IoU —</div>
     </div>
     <div id="sceneEuropeNote" hidden>cities shown as examples of EGMS coverage</div>
+    <div id="headline" class="fui-panel" aria-live="polite"></div>
+    <div id="historyStrip" hidden aria-label="History strip: risk per bridge per month"></div>
     <div id="caption"></div>
     <div id="captionLive" class="visually-hidden" aria-live="polite"></div>
     <div id="sceneTag" hidden></div>
@@ -821,7 +832,7 @@ function initMap() {
     style: fuiStyle,
     center: [13.745, 51.057], zoom: REDUCED ? 12.3 : 11, pitch: 55, maxPitch: 75
   });
-  map.addControl(new maplibregl.NavigationControl(), "top-left");
+  map.addControl(new maplibregl.NavigationControl(), "top-right");
   map.on("load", () => {
     map.addSource("bridges", { type: "geojson",
       data: "data/bridges.geojson", promoteId: "id" });
@@ -1028,6 +1039,32 @@ function initMap() {
   layerToggle("btnScatter", "scatterers-circles");
   layerToggle("btnSam", "sam-lines");
   layerToggle("btnRadar", "s1-raster");
+  // History strip toggle (phase 9c): the Explore strip is a map overlay
+  // that a small screen can hide. Default open at 900 px and above,
+  // collapsed below, decided once at startup.
+  const stripBtn = $("btnStrip");
+  if (stripBtn) {
+    try {
+      if (window.matchMedia && window.matchMedia("(max-width: 899px)").matches) {
+        document.body.dataset.stripCollapsed = "1";
+      }
+    } catch (e) { /* open by default */ }
+    const syncStripBtn = () => {
+      const collapsed = document.body.dataset.stripCollapsed === "1";
+      stripBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      stripBtn.setAttribute("aria-pressed", collapsed ? "false" : "true");
+      stripBtn.classList.toggle("active", !collapsed);
+    };
+    stripBtn.onclick = () => {
+      if (document.body.dataset.stripCollapsed === "1") {
+        delete document.body.dataset.stripCollapsed;
+      } else {
+        document.body.dataset.stripCollapsed = "1";
+      }
+      syncStripBtn();
+    };
+    syncStripBtn();
+  }
   $("btnMemo").onclick = () => {
     if (!hasMemo(CUT[cutoffIdx])) return;
     memoOpen = true;

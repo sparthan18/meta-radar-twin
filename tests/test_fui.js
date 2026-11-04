@@ -954,6 +954,17 @@ check("9b story II is ported and wired (page exists, two entry links, pinned hos
   story2HostsPinned &&
   story2Bare.length === 0);
 
+// --- phase 9c: Explore fits one screen ---
+check("9c headline and history strip live in the map before the caption, no 148px calc",
+  (() => {
+    const m = indexHtml.indexOf('id="map"');
+    const h = indexHtml.indexOf('id="headline"');
+    const s = indexHtml.indexOf('id="historyStrip"');
+    const c = indexHtml.indexOf('id="caption"');
+    return m !== -1 && h > m && h < c && s > m && s < c &&
+      indexHtml.indexOf("calc(100vh - 148px)") === -1;
+  })());
+
 if (failures) {
   console.log(`test_fui: FAIL (${failures} failure(s))`);
   process.exit(1);

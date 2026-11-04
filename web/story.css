@@ -9,6 +9,7 @@ body[data-mode="story"] #map { flex-basis: 100%; height: 100vh; min-height: 0; }
 body[data-mode="story"] .maplibregl-control-container { display: none; }
 body[data-mode="explore"] #storyBar { display: none; }
 body[data-mode="story"] #btnMemo { display: none; } /* its panel lives in the hidden side */
+body[data-mode="story"] #btnStrip { display: none; } /* the strip toggle lives in the hidden header */
 body[data-mode="story"] #btnWatchStory, body[data-mode="story"] #btnWatchStory2 { display: none; }
 body[data-mode="story"] #historyStrip[hidden],
 body[data-mode="explore"] #historyStrip[hidden] { display: none; }
@@ -16,7 +17,6 @@ body[data-mode="explore"] #sceneIndex { display: none; }
 
 /* ---------- Headline card: bracket frame, 24 px display line, 14 px mono reason ---------- */
 #headline {
-  flex: 0 0 100%;
   padding: 10px 14px;
   min-height: 2.7em; /* stable while scene 4 steps months */
 }
@@ -45,6 +45,15 @@ body[data-mode="story"] #headline {
   width: min(430px, 40%);
   flex: none;
 }
+/* In Explore the card lives on the map, top-left. */
+body[data-mode="explore"] #headline {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 30;
+  width: min(430px, 40%);
+  flex: none;
+}
 
 /* History strip (phase 7b, restyled 8a, composed 8b, fixed 8b-fix2):
    no card, no scrollbar; 11 px mono uppercase row labels in Explore,
@@ -54,7 +63,6 @@ body[data-mode="story"] #headline {
    labels) / 33, 9 px tall, 1 px gaps, 10 px pitch, 200 px for 20
    rows), anchored just above the caption band. */
 #historyStrip {
-  flex: 0 0 100%;
   background: transparent;
   border: 0;
   padding: 0;
@@ -102,6 +110,58 @@ body[data-mode="story"] #historyStrip .history-label {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+/* In Explore the strip is a captioned card on the map, bottom-left. The
+   frame copies .fui-panel (fui.css) instead of adding the class, so the
+   story-mode strip stays cardless. */
+body[data-mode="explore"] #historyStrip {
+  position: absolute;
+  left: 12px;
+  bottom: 36px;
+  z-index: 29;
+  flex: none;
+  display: block;
+  background-color: var(--bg-2-glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-radius: 2px;
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line));
+  background-size:
+    var(--fui-bracket) 1px, 1px var(--fui-bracket),
+    var(--fui-bracket) 1px, 1px var(--fui-bracket),
+    var(--fui-bracket) 1px, 1px var(--fui-bracket),
+    var(--fui-bracket) 1px, 1px var(--fui-bracket);
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  padding: 8px;
+}
+body[data-mode="explore"] #historyStrip::before {
+  content: "HISTORY · 20 BRIDGES × 33 MONTHS";
+  display: block;
+  font-family: var(--font-data);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+body[data-mode="story"] #historyStrip::before {
+  content: none;
+}
+body[data-mode="explore"][data-strip-collapsed="1"] #historyStrip {
+  display: none;
 }
 
 /* ---------- Story bar: the scrub line along the bottom edge ----------
@@ -909,6 +969,9 @@ body.story-reduced .annotate-line { transition: none; }
   #btnCC, #btnExploreStory { min-height: 40px; }
   #btnWatchStory, #btnWatchStory2 { min-height: 40px; }
   body[data-mode="story"] #headline {
+    left: 8px; right: 8px; width: auto;
+  }
+  body[data-mode="explore"] #headline {
     left: 8px; right: 8px; width: auto;
   }
   body[data-mode="story"] #historyStrip { left: 8px; right: 8px; }
