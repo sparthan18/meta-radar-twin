@@ -50,6 +50,7 @@ header { padding: 0 16px; border-bottom: 1px solid var(--border);
   padding: 8px 0 9px; }
 .transport { display: flex; align-items: center; gap: 16px; flex: 1 1 760px;
   max-width: 980px; min-width: 0; }
+.deck { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0; padding: 4px 14px 4px 6px; border: 1px solid var(--line-strong); border-radius: 2px; background: rgba(11, 18, 32, 0.5); }
 .toggles { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 0;
   margin-left: auto; }
 #btnPlay { width: 36px; height: 36px; flex: none; position: relative; padding: 0;
@@ -81,6 +82,8 @@ header { padding: 0 16px; border-bottom: 1px solid var(--border);
   font: 500 9.5px/1 var(--font-data); letter-spacing: 0.08em; color: var(--text-dim); }
 .tl-years > span { position: absolute; transform: translateX(-50%); }
 .tl-years > span:first-child { transform: none; }
+.tl-years span::before { content: ""; position: absolute; left: 50%; bottom: 100%; width: 1px; height: 11px; margin-bottom: 1px; background: var(--line-strong); }
+.tl-years > span:first-child::before { left: 0; }
 .tl-event { position: absolute; right: 0; top: 12px; width: 2px; height: 8px;
   background: var(--accent); box-shadow: 0 0 6px var(--accent); }
 .tl-event-label { position: absolute; right: 0; top: 0;
@@ -267,6 +270,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
   </div>
   <div class="controls">
     <div class="transport">
+      <div class="deck">
       <button id="btnPlay" type="button" aria-pressed="false" aria-label="Play">Play</button>
       <div class="timeline">
         <label for="slider" class="visually-hidden">Month</label>
@@ -274,6 +278,7 @@ details.eng summary { cursor: pointer; font-weight: 600; font-size: 12px;
         <div class="tl-years" aria-hidden="true"></div>
         <i class="tl-event" aria-hidden="true"></i>
         <span class="tl-event-label" aria-hidden="true">COLLAPSE · 11 SEP 2024</span>
+      </div>
       </div>
       <div class="readout">
         <b id="cutoffWord">SEP 2024</b>

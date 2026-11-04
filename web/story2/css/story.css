@@ -29,14 +29,23 @@
 /* landing */
 #landing { position: absolute; inset: 0; z-index: 37; pointer-events: none; opacity: 0; transition: opacity 0.6s; }
 #landing.on { opacity: 1; pointer-events: auto; }
-#landing .word { position: absolute; left: 0; right: 0; top: 60%; text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 120px; line-height: 1; letter-spacing: 0.06em; color: var(--fg);
+/* The title stack hangs from --lt: 60% of the height on a tall window, but never so low that
+   the Play button runs into the tagline at the bottom on a short one. The word and the two
+   offsets scale with the height for the same reason. */
+#landing { --lt: min(60%, calc(100% - var(--bar) - 260px)); }
+#landing .word { position: absolute; left: 0; right: 0; top: var(--lt); text-align: center; font-family: var(--font-display); font-weight: 700; font-size: min(120px, 14vh); line-height: 1; letter-spacing: 0.06em; color: var(--fg);
   text-shadow: 0 0 24px rgba(7,11,20,.85), 0 1px 2px rgba(7,11,20,.9); }
-#landing .sub { position: absolute; left: 0; right: 0; top: calc(60% + 118px); text-align: center; font-family: var(--font-data); font-size: 14px; letter-spacing: 0.3em; color: rgba(230,238,252,0.85);
+#landing .sub { position: absolute; left: 0; right: 0; top: calc(var(--lt) + min(118px, 15vh)); text-align: center; font-family: var(--font-data); font-size: 14px; letter-spacing: 0.3em; color: rgba(230,238,252,0.85);
   text-shadow: 0 0 24px rgba(7,11,20,.85), 0 1px 2px rgba(7,11,20,.9); }
-#play { position: absolute; left: 50%; top: calc(60% + 150px); transform: translateX(-50%); background: none; border: 0; color: var(--fg); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: var(--font-data); font-size: 11px; letter-spacing: 0.3em; }
-#play .ring { width: 56px; height: 56px; border: 1px solid var(--line-strong); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-#play .tri { width: 0; height: 0; border-left: 14px solid var(--fg); border-top: 8px solid transparent; border-bottom: 8px solid transparent; margin-left: 4px; }
-#play:hover .ring { border-color: var(--fg); }
+#play { position: absolute; left: 50%; top: calc(var(--lt) + min(150px, 21vh)); transform: translateX(-50%); background: none; border: 0; color: var(--fg); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: var(--font-data); font-size: 11px; letter-spacing: 0.3em; }
+#play .lbl { position: static; letter-spacing: 0.3em; } /* the HUD's .lbl rule is absolute; the word stays under the ring */
+#play .ring { width: 56px; height: 56px; border: 1px solid var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 18px var(--accent-soft), inset 0 0 12px rgba(255,90,60,0.12); animation: play-blink 1.6s ease-in-out infinite; }
+#play .tri { width: 0; height: 0; border-left: 14px solid var(--accent); border-top: 8px solid transparent; border-bottom: 8px solid transparent; margin-left: 4px; }
+#play:hover .ring { border-color: var(--fg); animation-play-state: paused; opacity: 1; }
+#play:hover .tri { border-left-color: var(--fg); }
+@keyframes play-blink { 0%, 100% { opacity: 1; box-shadow: 0 0 18px var(--accent-soft), inset 0 0 12px rgba(255,90,60,0.12); } 50% { opacity: 0.45; box-shadow: 0 0 4px rgba(255,90,60,0.1), inset 0 0 0 rgba(255,90,60,0); } }
+@media (prefers-reduced-motion: reduce) { #play .ring { animation: none; } }
 #landing .tag { position: absolute; left: 0; right: 0; bottom: calc(var(--bar) + 18px); text-align: center; font-family: var(--font-data); font-size: 11px; letter-spacing: 0.14em; color: var(--fg-dim); text-transform: uppercase; }
 
 /* ending */
