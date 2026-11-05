@@ -11,6 +11,8 @@ RadarTwin turns that feed into a ranked inspection list for every bridge in a ci
 
 Validated on Dresden (20 bridges in the data, 19 monitored, EGMS 2020–2024), it would have flagged the Carolabrücke twice before its September 2024 collapse: first in October 2023, again in August 2024, and alone at the top in September 2024. It ranks assets for inspection; it does not predict failure or its timing.
 
+[![Watch the three-minute demo](https://img.youtube.com/vi/QeOw-llszSY/maxresdefault.jpg)](https://www.youtube.com/watch?v=QeOw-llszSY)
+
 Watch the three-minute demo: https://www.youtube.com/watch?v=QeOw-llszSY
 
 ## Quick start
