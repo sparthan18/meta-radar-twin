@@ -2,13 +2,20 @@
 
 Europe already measures how every bridge moves: the European Ground Motion Service publishes millimetre-scale Sentinel-1 radar time series for the whole continent, free, with hundreds of measurement points on a typical city bridge. Almost no bridge owner reads them, because they arrive as millions of points with no notion of what a bridge is, let alone which one needs an inspector. On 11 September 2024 the Carolabrücke in Dresden partially collapsed into the Elbe; the data covering it had been public the whole time.
 
-RadarTwin turns that feed into a ranked inspection list for every bridge in a city, with typed risk decisions and stated probabilities. It binds radar scatterers to bridge footprints, splits each deck into spans along its axis, deseasons every series, combines ascending and descending passes into vertical motion per span, and scores each bridge on reliability-weighted differential motion in a leak-free rolling retrospective — against its own history and against every other bridge in the city. Validated on Dresden (20 bridges in the data, 19 monitored, EGMS 2020–2024), it would have flagged the Carola Bridge twice before its September 2024 collapse. It ranks assets for inspection; it does not predict failure or its timing.
+RadarTwin turns that feed into a ranked inspection list for every bridge in a city, with typed risk decisions and stated probabilities. For each bridge it:
+
+- binds the radar scatterers to the bridge footprint and splits the deck into spans along its axis;
+- deseasons every series and combines ascending and descending passes into vertical motion per span;
+- scores the bridge on reliability-weighted differential motion, against its own history and against every other bridge in the city;
+- does all of it in a leak-free rolling retrospective: each month is scored only with the data that existed at that month.
+
+Validated on Dresden (20 bridges in the data, 19 monitored, EGMS 2020–2024), it would have flagged the Carolabrücke twice before its September 2024 collapse: first in October 2023, again in August 2024, and alone at the top in September 2024. It ranks assets for inspection; it does not predict failure or its timing.
 
 ## Quick start
 
-Three honest paths from a cold clone (`data/` and `out/` are gitignored and absent until you run the pipeline).
+Three honest paths from a cold clone. `data/` and `out/` are gitignored and absent until you run the pipeline.
 
-(a) Tests and the web page run from the clone with no data and no keys:
+### (a) Tests and the web page, no data and no keys
 
 ```sh
 node tests/test_annotate.js
@@ -24,9 +31,19 @@ uv sync
 cd web && python3 -m http.server 8137   # then open http://localhost:8137/
 ```
 
-The seven `node tests/test_*.js` checks need only Node. The two Python test scripts need `uv sync` first but no data and no keys. The web page and the documentary play from the shipped `web/data/` (see (c)) over any static server; use an unused port (8765 was taken on this machine).
+- The seven `node tests/test_*.js` checks need only Node.
+- The two Python test scripts need `uv sync` first, but no data and no keys.
+- The web page and the documentary play from the shipped `web/data/` (see (c)) over any static server. Use an unused port; 8765 was taken on this machine.
 
-(b) The pipeline needs the EGMS Level 2a clips for the Dresden tile and the Meta Model API key. Fetch the clips from the EGMS download service; the tile ids are in `scripts/` (`scripts/rank_city.py` expects `clip_asc_044.csv`, `clip_asc_146.csv`, `clip_desc_095.csv`). Place them as `data/<site>/clip_*.csv` (for Dresden: `data/carola/clip_*.csv`). Each clip is an EGMS CSV: one row per scatterer with `pid, latitude, longitude, los_east, los_north, los_up` and the other SPEC §2.1 columns, plus one `YYYYMMDD` epoch column per pass holding LOS displacement in mm relative to the first epoch. Then, in order:
+### (b) The pipeline, with the EGMS clips and a Meta Model API key
+
+The pipeline needs the EGMS Level 2a clips for the Dresden tile and the Meta Model API key.
+
+- Fetch the clips from the EGMS download service. The tile ids are in `scripts/`; `scripts/rank_city.py` expects `clip_asc_044.csv`, `clip_asc_146.csv` and `clip_desc_095.csv`.
+- Place them as `data/<site>/clip_*.csv` (for Dresden: `data/carola/clip_*.csv`).
+- Each clip is an EGMS CSV: one row per scatterer with `pid, latitude, longitude, los_east, los_north, los_up` and the other SPEC §2.1 columns, plus one `YYYYMMDD` epoch column per pass holding LOS displacement in mm relative to the first epoch.
+
+Then, in order:
 
 ```sh
 uv sync
@@ -46,7 +63,9 @@ uv run python scripts/sam_vs_osm.py
 
 `scripts/check_web_data.py` needs `out/` and therefore runs only after a pipeline run.
 
-(c) The shipped `web/data/` is the pipeline's output as of the last run and is what the page and the documentary play. It is committed so the page works from the clone; re-running the pipeline and `export_web.py` refreshes it.
+### (c) The shipped data
+
+`web/data/` is the pipeline's output as of the last run and is what the page and the documentary play. It is committed so the page works from the clone; re-running the pipeline and `export_web.py` refreshes it.
 
 ## Setup
 
@@ -66,11 +85,15 @@ MODEL_API_KEY=<meta-model-api-key>
 
 ## Run
 
+### Ranking
+
 ```sh
 uv run python scripts/rank_city.py carola
 ```
 
-This loads the clipped EGMS CSVs, binds scatterers to OSM bridge footprints, runs the rolling retrospective at monthly cutoffs (2022-01-01 to the event month), and writes scores, the ranking figure and reusable state.
+Loads the clipped EGMS CSVs, binds scatterers to OSM bridge footprints, runs the rolling retrospective at monthly cutoffs (2022-01-01 to the event month), and writes scores, the ranking figure and reusable state.
+
+### Decisions and the memo
 
 ```sh
 uv run python scripts/decisions.py all          # features + flags + rubric decision at every cutoff
@@ -80,11 +103,34 @@ uv run python scripts/decisions.py --model all         # + model decisions at ev
 uv run python scripts/audit.py 2024-09-01       # Muse Spark audit agent: memo + hazard layer
 ```
 
-`scripts/decisions.py` reads `out/dresden_state.pkl` and writes `out/decisions_<cutoff>.csv` per cutoff (plus `out/escalation_counts.csv` with `all`). With `--model`, every analysed bridge also gets a Muse Spark decision (SPEC §5.0: three single-letter questions, five votes each, vote shares as probabilities); the rubric table is reused unchanged and the side-by-side result goes to `out/model_decisions_<cutoff>.csv`. With `--model all`, the script first measures one cutoff (2024-09-01) and projects the cost at $1.25/$4.25 per million input/output tokens: all 33 cutoffs if the projection is within budget, else only the 21 cutoffs 2023-01-01 to 2024-09-01, else it stops. It then writes `out/model_agreement.csv` (per-cutoff model-vs-rubric risk agreement) and `out/model_disagreements.csv`. Model responses are cached under `out/cache/` keyed by request hash plus sample index, so re-runs reproduce the same votes at zero cost. Not-monitored bridges keep their deterministic row. `scripts/audit.py` needs `MODEL_API_KEY` in `.env` (model from `RADARTWIN_LLM`, default `muse-spark-1.3`) and writes `out/memo_<cutoff>.md`, `out/audit_<cutoff>_tools.json` and `out/hazards_<cutoff>.geojson`. `uv run python scripts/check_memo.py <cutoff>` verifies every number in a memo traces back to the logged tool results.
+- `scripts/decisions.py` reads `out/dresden_state.pkl` and writes `out/decisions_<cutoff>.csv` per cutoff, plus `out/escalation_counts.csv` with `all`.
+- With `--model`, every analysed bridge also gets a Muse Spark decision (SPEC §5.0: three single-letter questions, five votes each, vote shares as probabilities). The rubric table is reused unchanged and the side-by-side result goes to `out/model_decisions_<cutoff>.csv`.
+- With `--model all`, the script first measures one cutoff (2024-09-01) and projects the cost at $1.25/$4.25 per million input/output tokens: all 33 cutoffs if the projection is within budget, else only the 21 cutoffs 2023-01-01 to 2024-09-01, else it stops. It then writes `out/model_agreement.csv` (per-cutoff model-vs-rubric risk agreement) and `out/model_disagreements.csv`.
+- Model responses are cached under `out/cache/` keyed by request hash plus sample index, so re-runs reproduce the same votes at zero cost. Not-monitored bridges keep their deterministic row.
+- `scripts/audit.py` needs `MODEL_API_KEY` in `.env` (model from `RADARTWIN_LLM`, default `muse-spark-1.3`) and writes `out/memo_<cutoff>.md`, `out/audit_<cutoff>_tools.json` and `out/hazards_<cutoff>.geojson`.
+- `uv run python scripts/check_memo.py <cutoff>` verifies that every number in a memo traces back to the logged tool results.
 
 ## Decisions
 
-Risk decisions come from the Muse Spark model (`radartwin/decide/model.py`, SPEC §5.0) with probabilities, checked against the deterministic rubric (`radartwin/decide/rubric.py`, SPEC §4) at every cutoff. The model sees the pre-computed per-asset features (SPEC §3.6) and the deterministic flags — motion, acceleration, differential movement, own-history outlier, quality/coverage, escalation, persistence — and answers three single-letter multiple-choice questions (pattern, risk, inspection) five times each; per-field vote shares are the probabilities. The rubric's verdict and the owner condition are never in the model input. The rubric stays as the independent check: flags feed the escalation rule (outlier + differential), persistence is leak-free (`months_since_esc` keeps an asset elevated for 3 months after an escalation, `escalations_12m` is evidence only), and the risk ladder is high (escalating now) / elevated / watch / none, capped at watch for thinly measured or radar-blind assets. The owner-register condition stays an external overlay (`owner_condition_alert = high and condition == "poor"`, with `condition_source`); headline numbers use the model and ladder only. Named bridges radar cannot see are carried as not monitored (`pattern = "not_monitored"`, `risk_level = "unknown"`, `radar_coverage = "none"`, with the reason) in decisions, the hazard layer and the memo. The audit memo's Action and Watch lists follow the model decision, with a Model and rubric section listing disagreements with the model's probability; owner inputs stay in the Owner condition section only.
+Risk decisions come from the Muse Spark model (`radartwin/decide/model.py`, SPEC §5.0) with probabilities, checked against the deterministic rubric (`radartwin/decide/rubric.py`, SPEC §4) at every cutoff.
+
+**What the model sees and answers.**
+
+- Input: the pre-computed per-asset features (SPEC §3.6) and the deterministic flags: motion, acceleration, differential movement, own-history outlier, quality/coverage, escalation, persistence.
+- Output: three single-letter multiple-choice questions (pattern, risk, inspection), each asked five times; the per-field vote shares are the probabilities.
+- Never in the model input: the rubric's verdict and the owner condition.
+
+**The rubric as the independent check.**
+
+- Flags feed the escalation rule (outlier + differential).
+- Persistence is leak-free: `months_since_esc` keeps an asset elevated for 3 months after an escalation; `escalations_12m` is evidence only.
+- The risk ladder is high (escalating now) / elevated / watch / none, capped at watch for thinly measured or radar-blind assets.
+
+**What stays outside.**
+
+- The owner-register condition is an external overlay (`owner_condition_alert = high and condition == "poor"`, with `condition_source`); headline numbers use the model and ladder only.
+- Named bridges radar cannot see are carried as not monitored (`pattern = "not_monitored"`, `risk_level = "unknown"`, `radar_coverage = "none"`, with the reason) in decisions, the hazard layer and the memo.
+- The audit memo's Action and Watch lists follow the model decision, with a Model and rubric section listing disagreements with the model's probability; owner inputs stay in the Owner condition section only.
 
 Status: model decisions exist for all 33 cutoffs (2022-01-01 to 2024-09-01). See `docs/history.md` for the phase-by-phase decisions history.
 
@@ -112,14 +158,25 @@ Status: model decisions exist for all 33 cutoffs (2022-01-01 to 2024-09-01). See
 | `audit_<cutoff>_tools.json` | Logged tool calls/results behind a memo |
 | `hazards_<cutoff>.geojson` | Bridge polygons with features, flags and decision as properties |
 
-
 Validation: the pipeline reproduces an independent implementation of SPEC.md to < 0.05 mm/yr (max |score difference| over every bridge and cutoff versus `reference/dresden_scores.csv`).
 
 ## Web map (`web/`)
 
-The page opens in Explore under an instrument-bar header: a brand strip with the "Watch the documentary" link, a transport with the ticked month timeline and the collapse marked at its end, and quiet layer chips grouped under BASE, LAYERS and REPORT. **Explore** is the dashboard, opening with satellite imagery on (the Dark option switches to the vector basemap). The selected bridge is drawn as a deck in 3D at zoom 14 and above (`web/deck3d.js`, a MapLibre custom layer rendered with three.js 0.160.0: one box per span raised or lowered by the month's movement, pillars, span colours, a red glow while the bridge is high) with the close-up HUD beside it: two thin rings and a four-line data block (name, month, rank and z, worry word) from the selected month only. The SVG side view in the detail panel remains the phone and fallback view. The proof numbers shown in the documentary come from `proof.json`, written by `scripts/check_truncation.py --json`: every per-cutoff quantity identical with the later months deleted, and the months where model and checklist pick the same high bridges; the Sentinel-2 chip with the SAM outline is rendered by `scripts/render_s2_chip.py`.
+### What the page is
 
-Export once, then serve the static page locally:
+The page (`web/index.html`, MapLibre GL 4.7.1 from unpkg, no build step) opens in Explore, the dashboard, on satellite imagery.
+
+- **Header, an instrument bar:** a brand strip with the "Watch the documentary" link; a transport with Play, a ticked month timeline (one step per cutoff, year marks, the collapse marked at its right end) and the month readout; layer chips grouped under BASE, LAYERS and REPORT. At September 2024 the readout's second line reads "Collapse 10 days after this cutoff" and the timeline's event label lights red.
+- **Map:** the 20 bridges (19 monitored) coloured by the model risk at the selected month via feature-state. Span dots use a blue-white-red scale over ±4 mm/yr and open a popup with that span's value at the selected month. Below zoom 15 each bridge also gets a risk-coloured marker, drawn above the span dots. Augustusbrücke is grey with a dashed outline and "not monitored by radar" plus its reason; its length (≈ 354 m) is the long side of the minimum rotated rectangle.
+- **Close-up:** at zoom 14 and above the selected bridge is drawn as a deck in 3D (`web/deck3d.js`, a MapLibre custom layer rendered with three.js 0.160.0: one box per span raised or lowered by the month's movement, pillars, span colours, a red glow while the bridge is high), with the close-up HUD beside it: two thin rings and a four-line data block (name, month, rank and z, worry word) from the selected month only. The SVG side view in the detail panel remains the phone and fallback view.
+- **Side panel:** a legend; a ranking list sorted by model risk, then rank (rank, name, score, model risk pill, inspect flag); a detail panel (scatterers, tracks, rank, score, wmax, wspread, z, velocity, escalation history, flag chips, model vote shares out of 5 beside the rubric verdict, and a per-span SVG chart showing only months up to the selected cutoff with the collapse marker only on the event month). Owner condition appears only in its own labelled block.
+- **Base and layers:** Satellite (Esri World Imagery, optical) is on by default; Dark switches to the OpenFreeMap vector basemap. Three layers are off by default: Tracked points (the 3,694 EGMS scatterers, coloured by their own cutoff velocity at the selected month, from `scatterer_velocity.json`; never a whole-period value), SAM outline (SAM 3.1 outlines near Carolabrücke with score and IoU) and Radar chip S-1 (the Sentinel-1 amplitude chip rendered by `scripts/render_s1_chip.py`). The history strip sits on the map at bottom-left and can be hidden with the History button.
+- **Memo:** the Memo button opens the audit memo for the selected month, rendered by the dependency-free `web/memo.js` (tested with `node tests/test_memo_render.js`), or says there is none.
+- **Replay:** Play replays the 33 months at 0.7 s per step with eased recolouring, rows sliding to their new rank and the headline card changing per month; it stops at September 2024, and pressed there it starts again from January 2022.
+- **Access:** all motion is off under `prefers-reduced-motion`. The page works at phone width (map on top, panel below) and by keyboard alone: a skip link, focusable ranking rows, `aria-pressed` toggles, a slider that announces the month, and risk pills at 4.5:1 contrast or better.
+- **External calls:** Google Fonts; GSAP and three.js from cdnjs; MapLibre from unpkg; vector tiles and glyphs from tiles.openfreemap.org; Esri imagery, which is on by default.
+
+### Exporting the data the page reads
 
 ```sh
 .venv/bin/python scripts/export_web.py      # out/ -> web/data/ (no API calls)
@@ -127,23 +184,36 @@ Export once, then serve the static page locally:
 cd web && python -m http.server 8137        # then open http://localhost:8137/
 ```
 
-`export_web.py` reads `out/` only and writes `web/data/bridges.geojson` (simplified footprints for all 20 bridges, 19 monitored), `spans.json` (per-span vertical-change series), `decisions.json` (model + rubric side by side for all 33 cutoffs), `scatterers.geojson` (3,694 points, position and track only), `scatterer_velocity.json` (each point's leak-free velocity at all 33 cutoffs, from `scripts/point_velocity.py` via `out/scatterer_velocity.csv`), `s1_amplitude.png` + `.json` (the radar chip and its corners), `sam.geojson` (SAM polygons with IoU; `bright_fraction` is null because the radar chip lives under `data/`, which the exporter must not read) and `memos/<cutoff>.md` (verbatim copies of any audit memos in `out/`, listed in `decisions.json` as `memo_cutoffs`; Oct 2023 and Sep 2024 today). Total 1.77 MB (limit 3 MB).
+`export_web.py` reads `out/` only and writes, 1.77 MB in all (limit 3 MB):
 
-The page (`web/index.html`, MapLibre GL 4.7.1 from unpkg, no build step) shows the 20 bridges (19 monitored) coloured by the model risk at the selected month via feature-state, a ticked month timeline with one step per cutoff, year marks and the collapse marked at its right end (at September 2024 the readout's second line reads "Collapse 10 days after this cutoff" and the timeline's event label lights red), a legend, a ranking list sorted by model risk, then rank (rank, name, score, model risk pill, inspect flag) and a detail panel (scatterers, tracks, rank, score, wmax, wspread, z, velocity, escalation history, flag chips, model vote shares out of 5 beside the rubric verdict, and a per-span SVG chart showing only months up to the selected cutoff with the collapse marker only on the event month). The page opens with the Satellite basemap on (Esri World Imagery, optical); the Dark option switches to the OpenFreeMap vector basemap. Span dots use a blue-white-red scale over ±4 mm/yr and open a popup with that span's value at the selected month. Below zoom 15 each bridge also gets a risk-coloured marker, drawn above the span dots. Three layers are off by default: Tracked points (the 3,694 EGMS scatterers, coloured by their own cutoff velocity at the selected month, from `scatterer_velocity.json`; never a whole-period value), SAM outline (SAM 3.1 outlines near Carolabrücke with score and IoU) and Radar chip S-1 (the Sentinel-1 amplitude chip rendered by `scripts/render_s1_chip.py`). Augustusbrücke is grey with a dashed outline and "not monitored by radar" plus its reason; its length (≈ 354 m) is the long side of the minimum rotated rectangle. Owner condition appears only in its own labelled block. A Memo button opens the audit memo for the selected month, rendered by the dependency-free `web/memo.js` (tested with `node tests/test_memo_render.js`), or says there is none. A Play button replays the 33 months at 0.7 s per step with eased recolouring, rows sliding to their new rank and the headline card changing per month; it stops at September 2024, and pressed there it starts again from January 2022. The history strip sits on the map at bottom-left and can be hidden with the History button. All motion is off under `prefers-reduced-motion`. The page works at phone width (map on top, panel below) and by keyboard alone: a skip link, focusable ranking rows, `aria-pressed` toggles, a slider that announces the month, and risk pills at 4.5:1 contrast or better. External calls: the page loads Google Fonts, GSAP and three.js from cdnjs, MapLibre from unpkg, vector tiles and glyphs from tiles.openfreemap.org, and Esri imagery, which is on by default.
+- `bridges.geojson`: simplified footprints for all 20 bridges, 19 monitored;
+- `spans.json`: per-span vertical-change series;
+- `decisions.json`: model and rubric side by side for all 33 cutoffs;
+- `scatterers.geojson`: 3,694 points, position and track only;
+- `scatterer_velocity.json`: each point's leak-free velocity at all 33 cutoffs, from `scripts/point_velocity.py` via `out/scatterer_velocity.csv`;
+- `s1_amplitude.png` + `.json`: the radar chip and its corners;
+- `sam.geojson`: SAM polygons with IoU (`bright_fraction` is null because the radar chip lives under `data/`, which the exporter must not read);
+- `memos/<cutoff>.md`: verbatim copies of any audit memos in `out/`, listed in `decisions.json` as `memo_cutoffs` (Oct 2023 and Sep 2024 today).
+
+The proof numbers shown in the documentary come from `proof.json`, written by `scripts/check_truncation.py --json`: every per-cutoff quantity identical with the later months deleted, and the months where model and checklist pick the same high bridges. The Sentinel-2 chip with the SAM outline is rendered by `scripts/render_s2_chip.py`.
 
 ## How it was built
 
-Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in order — except the documentary, see below — with the design contract in `docs/design-spec.md` and the story contract in `docs/story-spec.md`. `tests/frames.md` is the frame-by-frame review checklist the owner used. See `docs/history.md` for the phase-by-phase build history.
+Every phase was built by Muse Code from the prompt files in `muse/prompts/`, in order, except the documentary (see below), with the design contract in `docs/design-spec.md` and the story contract in `docs/story-spec.md`. `tests/frames.md` is the frame-by-frame review checklist the owner used. See `docs/history.md` for the phase-by-phase build history.
 
 ### The documentary (`web/story2/`)
 
-Press "Watch the documentary" on the page, or open `/story2/` directly after `cd web && python3 -m http.server 8137`. Nine chapters, two minutes: the globe and the crane down to the Carolabrücke with the collapse played on the structure, how radar sees, twenty bridges, three years of monthly cutoffs, the close-up, the report, the proof, Europe, and the ending. Every number in it comes from the same files as the page. The documentary was designed and built during the Hackathon in a separate working folder and is not a Muse Code build; Muse Code ported it into this repository in phase 9b.
+Press "Watch the documentary" on the page, or open `/story2/` directly after `cd web && python3 -m http.server 8137`.
+
+- Nine chapters, two minutes: the globe and the crane down to the Carolabrücke with the collapse played on the structure, how radar sees, twenty bridges, three years of monthly cutoffs, the close-up, the report, the proof, Europe, and the ending.
+- Every number in it comes from the same files as the page.
+- The documentary was designed and built during the Hackathon in a separate working folder and is not a Muse Code build; Muse Code ported it into this repository in phase 9b.
 
 ## Data and attribution
 
 - EGMS (European Ground Motion Service, Copernicus) for the InSAR data.
 - OpenStreetMap contributors via OpenFreeMap (ODbL) for the basemap.
-- Esri for the optional imagery.
+- Esri for the imagery.
 - Sentinel-2 (Copernicus) for the evidence chip.
 - The photograph in chapter 1 of the documentary (`web/story2/img/carola-20240911.jpg`) is from Wikimedia Commons, by Scalaran, released CC0, taken 11 September 2024.
 - The globe's land and borders in the documentary are Natural Earth via world-atlas.
